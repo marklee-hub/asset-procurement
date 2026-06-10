@@ -528,34 +528,55 @@ def page_assets(data):
         if f_unit != "全部":   mask &= assets["unit"] == f_unit
         if f_status != "全部": mask &= assets["status"] == f_status
         view = assets[mask]
-        st.caption(f"{len(view)} 筆")
+        st.caption(f"{len(view)} 筆 ・ {view['name'].nunique()} 種品項（點品項展開看個別明細）")
 
-        cols = st.columns(3)
-        for i, a in enumerate(view.to_dict("records")):
-            with cols[i % 3]:
-                st.markdown(
-                    f"<div class='acard'><div style='display:flex;justify-content:space-between'>"
-                    f"<div><div class='aid'>{a['id']}</div><div class='anm'>{a['name']}</div><div class='acat'>{a['category']}</div></div>"
-                    f"<div style='text-align:right;display:flex;flex-direction:column;gap:4px;align-items:flex-end'>"
-                    f"{pill(a['asset_type'], ATYPE_STYLE)}{pill(a['status'], ASTATUS_STYLE)}</div></div>"
-                    f"<div style='display:flex;justify-content:space-between;font-size:12px;color:{SUB};margin-top:8px'>"
-                    f"<span>取得 {a['acquired']}</span><span class='aval'>{nt(a['value'])}</span></div>"
-                    f"<div style='font-size:12px;color:{JADE};font-weight:700;margin-top:4px'>📄 {a['source_po']}</div></div>",
-                    unsafe_allow_html=True)
-                u, s = st.columns(2)
-                nu = u.selectbox("單位", UNITS, index=UNITS.index(a["unit"]) if a["unit"] in UNITS else 0,
-                                 key=f"lu_{a['id']}", label_visibility="collapsed")
-                ns = s.selectbox("狀態", ASSET_STATUS_OPTS, index=ASSET_STATUS_OPTS.index(a["status"]) if a["status"] in ASSET_STATUS_OPTS else 0,
-                                 key=f"ls_{a['id']}", label_visibility="collapsed")
-                if nu != a["unit"] or ns != a["status"]:
-                    upd = assets.set_index("id")
-                    upd.loc[a["id"], "unit"] = nu
-                    upd.loc[a["id"], "status"] = ns
-                    save("assets", upd.reset_index()[SCHEMAS["assets"]])
-                    flash(f"已更新資產 {a['id']}")
-                    st.rerun()
         if view.empty:
             st.info("沒有符合條件的資產")
+        else:
+            for name, g in view.groupby("name", sort=False):
+                total_val = g["value"].sum()
+                atype = "固定資產" if (g["asset_type"] == "固定資產").any() else "一般資產"
+                with st.expander(f"{name}　×{len(g)}　・　{atype}　・　{nt(total_val)}"):
+                    by_unit = g.groupby("unit").size()
+                    dist = "　".join(f"{u} {c}" for u, c in by_unit.items())
+                    st.markdown(f"<div style='color:{SUB};font-size:13px;margin-bottom:8px'>單位分佈：{dist}</div>", unsafe_allow_html=True)
+
+                    # 批次改派：把 N 件從某單位改派到另一單位
+                    present = list(by_unit.index)
+                    b1, b2, b3, b4 = st.columns([1.2, 1.2, 1, 0.8])
+                    src = b1.selectbox("來源單位", present, key=f"src_{name}")
+                    dst = b2.selectbox("改派到", UNITS, key=f"dst_{name}")
+                    avail = int((g["unit"] == src).sum())
+                    qty = b3.number_input("件數", min_value=1, max_value=max(1, avail), value=1, step=1, key=f"qty_{name}")
+                    if b4.button("改派", key=f"mvbtn_{name}", use_container_width=True):
+                        ids = g[g["unit"] == src]["id"].head(int(qty)).tolist()
+                        upd = assets.set_index("id")
+                        upd.loc[ids, "unit"] = dst
+                        save("assets", upd.reset_index()[SCHEMAS["assets"]])
+                        flash(f"已將「{name}」{len(ids)} 件從 {src} 改派到 {dst}")
+                        st.rerun()
+
+                    st.markdown(f"<div style='border-top:1px solid {LINE_SOFT};margin:10px 0 6px'></div>"
+                                f"<div style='color:{FAINT};font-size:12px;font-weight:700'>個別明細</div>", unsafe_allow_html=True)
+
+                    cap = 100
+                    recs = g.to_dict("records")
+                    for a in recs[:cap]:
+                        d1, d2, d3 = st.columns([1.3, 1, 1])
+                        d1.markdown(f"<div style='padding-top:8px;font-size:13px'><b>{a['id']}</b>　{pill(a['status'], ASTATUS_STYLE)}</div>", unsafe_allow_html=True)
+                        nu = d2.selectbox("單位", UNITS, index=UNITS.index(a["unit"]) if a["unit"] in UNITS else 0,
+                                          key=f"lu_{a['id']}", label_visibility="collapsed")
+                        ns = d3.selectbox("狀態", ASSET_STATUS_OPTS, index=ASSET_STATUS_OPTS.index(a["status"]) if a["status"] in ASSET_STATUS_OPTS else 0,
+                                          key=f"ls_{a['id']}", label_visibility="collapsed")
+                        if nu != a["unit"] or ns != a["status"]:
+                            upd = assets.set_index("id")
+                            upd.loc[a["id"], "unit"] = nu
+                            upd.loc[a["id"], "status"] = ns
+                            save("assets", upd.reset_index()[SCHEMAS["assets"]])
+                            flash(f"已更新資產 {a['id']}")
+                            st.rerun()
+                    if len(recs) > cap:
+                        st.caption(f"此品項共 {len(recs)} 筆，個別明細僅顯示前 {cap} 筆；大量調整請用上方「批次改派」。")
 
     with tab_board:
         st.markdown(f"<div style='background:{INDIGO_SOFT};color:{INDIGO};border-radius:12px;padding:10px 14px;"
