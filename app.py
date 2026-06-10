@@ -163,18 +163,23 @@ def require_login() -> bool:
     if st.session_state.get("authed"):
         return True
     logo = logo_data_uri()
-    brand = (f"<img src='{logo}' style='max-width:260px;max-height:90px;margin:0 auto 10px;display:block'>"
-             if logo else "<div style='font-size:34px'>📦</div>")
-    _, mid, _ = st.columns([1, 1.4, 1])
+    brand = (f"<img src='{logo}' style='max-width:280px;max-height:96px;margin:0 auto 16px;display:block'>"
+             if logo else "<div style='font-size:34px;margin-bottom:8px'>📦</div>")
+    # 降低瀏覽器跳出「儲存密碼／高強度密碼」提示
+    st.markdown("<input style='display:none' aria-hidden='true'>"
+                "<style>input[type=password]{-webkit-text-security:disc}</style>", unsafe_allow_html=True)
+    _, mid, _ = st.columns([1, 1.6, 1])
     with mid:
-        st.markdown("<div style='height:8vh'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height:7vh'></div>", unsafe_allow_html=True)
         st.markdown(
-            f"<div class='card' style='text-align:center;padding:32px'>"
+            f"<div class='card' style='text-align:center;padding:36px 32px'>"
             f"{brand}"
-            f"<h2 style='margin:.3rem 0'>採購・資產整合平台</h2>"
-            f"<p style='color:{SUB};margin-top:0'>請輸入共用密碼</p></div>",
+            f"<div style='font-size:22px;font-weight:800;white-space:nowrap;letter-spacing:.01em'>採購・資產整合平台</div>"
+            f"<div style='color:{SUB};font-size:14px;margin-top:8px'>請輸入共用密碼</div></div>",
             unsafe_allow_html=True)
-        pw = st.text_input("密碼", type="password", label_visibility="collapsed", placeholder="密碼")
+        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+        pw = st.text_input("密碼", type="password", label_visibility="collapsed",
+                           placeholder="請輸入共用密碼")
         if st.button("登入", type="primary", use_container_width=True):
             if pw == st.secrets.get("app_password", ""):
                 st.session_state.authed = True
