@@ -23,7 +23,7 @@ INDIGO, INDIGO_SOFT = "#4338CA", "#E7E7FA"
 DANGER = "#B42318"
 
 CATEGORIES = ["3C設備", "辦公家具", "音響設備", "文宣耗材"]
-UNITS = ["主堂", "兒童主日學", "媒體組", "行政辦公室", "總務倉庫"]
+UNITS = ["傳道部", "行銷部", "影音部", "行政部", "神學院", "財務部"]
 FIXED_THRESHOLD = 10000
 TRACKED = [c for c in CATEGORIES if c != "文宣耗材"]
 
