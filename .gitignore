@@ -1,0 +1,6 @@
+.streamlit/secrets.toml
+.streamlit/*.json
+.idea/
+__pycache__/
+*.pyc
+.DS_Store
