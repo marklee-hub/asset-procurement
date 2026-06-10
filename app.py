@@ -174,9 +174,13 @@ def get_spreadsheet():
     scopes = ["https://www.googleapis.com/auth/spreadsheets",
               "https://www.googleapis.com/auth/drive"]
     key_path = os.path.join(os.path.dirname(__file__), ".streamlit", "service_account.json")
-    if os.path.exists(key_path):                       # 讀本機 JSON 檔
+    if os.path.exists(key_path):                              # 1) 本機：讀 JSON 檔
         creds = Credentials.from_service_account_file(key_path, scopes=scopes)
-    else:                                              # 讀 secrets（Streamlit Cloud）
+    elif "service_account_json" in st.secrets:                # 2) 雲端：整段 JSON 字串（最省事）
+        import json
+        info = json.loads(st.secrets["service_account_json"])
+        creds = Credentials.from_service_account_info(info, scopes=scopes)
+    else:                                                     # 3) 雲端：[gcp_service_account] 分段
         creds = Credentials.from_service_account_info(dict(st.secrets["gcp_service_account"]), scopes=scopes)
     return gspread.authorize(creds).open_by_url(st.secrets["sheet"]["url"])
 
