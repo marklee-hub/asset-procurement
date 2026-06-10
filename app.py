@@ -148,15 +148,29 @@ def flash(msg):
 
 
 # ============================ 登入 ============================
+@st.cache_data(show_spinner=False)
+def logo_data_uri():
+    import base64
+    for ext, mime in [("png", "image/png"), ("jpg", "image/jpeg"), ("jpeg", "image/jpeg")]:
+        p = os.path.join(os.path.dirname(__file__), f"logo.{ext}")
+        if os.path.exists(p):
+            with open(p, "rb") as f:
+                return f"data:{mime};base64," + base64.b64encode(f.read()).decode()
+    return None
+
+
 def require_login() -> bool:
     if st.session_state.get("authed"):
         return True
+    logo = logo_data_uri()
+    brand = (f"<img src='{logo}' style='max-width:260px;max-height:90px;margin:0 auto 10px;display:block'>"
+             if logo else "<div style='font-size:34px'>📦</div>")
     _, mid, _ = st.columns([1, 1.4, 1])
     with mid:
         st.markdown("<div style='height:8vh'></div>", unsafe_allow_html=True)
         st.markdown(
             f"<div class='card' style='text-align:center;padding:32px'>"
-            f"<div style='font-size:34px'>📦</div>"
+            f"{brand}"
             f"<h2 style='margin:.3rem 0'>採購・資產整合平台</h2>"
             f"<p style='color:{SUB};margin-top:0'>請輸入共用密碼</p></div>",
             unsafe_allow_html=True)
@@ -727,11 +741,18 @@ def main():
         st.session_state.page = "儀表板"
 
     with st.sidebar:
-        st.markdown("<div style='display:flex;align-items:center;gap:8px;padding:6px 2px 14px'>"
-                    "<div style='width:32px;height:32px;border-radius:9px;background:#0F766E;display:flex;"
-                    "align-items:center;justify-content:center;font-size:18px'>📦</div>"
-                    "<div><div class='brand-title'>行政後勤</div>"
-                    "<div style='font-size:12px'>採購・資產整合平台</div></div></div>", unsafe_allow_html=True)
+        _logo = logo_data_uri()
+        if _logo:
+            st.markdown(
+                f"<div style='background:#fff;border-radius:12px;padding:10px;margin-bottom:12px;text-align:center'>"
+                f"<img src='{_logo}' style='max-width:100%;max-height:64px'></div>",
+                unsafe_allow_html=True)
+        else:
+            st.markdown("<div style='display:flex;align-items:center;gap:8px;padding:6px 2px 14px'>"
+                        "<div style='width:32px;height:32px;border-radius:9px;background:#0F766E;display:flex;"
+                        "align-items:center;justify-content:center;font-size:18px'>📦</div>"
+                        "<div><div class='brand-title'>行政後勤</div>"
+                        "<div style='font-size:12px'>採購・資產整合平台</div></div></div>", unsafe_allow_html=True)
 
         for label, icon in [("儀表板", "📊"), ("採購", "🛒"), ("資產", "📦"), ("供應商", "👥"), ("設定", "⚙️")]:
             active = st.session_state.page == label
