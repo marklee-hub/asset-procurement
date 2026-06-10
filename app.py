@@ -23,7 +23,8 @@ INDIGO, INDIGO_SOFT = "#4338CA", "#E7E7FA"
 DANGER = "#B42318"
 
 CATEGORIES = ["3C設備", "辦公家具", "音響設備", "文宣耗材"]
-UNITS = ["傳道部", "行銷部", "影音部", "行政部", "神學院", "財務部"]
+DEFAULT_UNITS = ["傳道部", "行銷部", "影音部", "行政部", "神學院", "財務部"]
+UNITS = list(DEFAULT_UNITS)   # 啟動時會從 Google Sheet 的 units 分頁覆蓋
 FIXED_THRESHOLD = 10000
 TRACKED = [c for c in CATEGORIES if c != "文宣耗材"]
 
@@ -41,6 +42,7 @@ SCHEMAS = {
     "po_items":        ["po_id", "name", "category", "qty", "price"],
     "assets":          ["id", "name", "category", "value", "source_po",
                         "acquired", "asset_type", "unit", "status"],
+    "units":           ["name"],
 }
 NUMERIC = {"po_items": ["qty", "price"], "assets": ["value"]}
 
@@ -213,7 +215,10 @@ def load_all() -> dict:
 def save(name: str, df: pd.DataFrame):
     ss = get_spreadsheet()
     df = df[SCHEMAS[name]]
-    ws = ss.worksheet(name)
+    try:
+        ws = ss.worksheet(name)
+    except gspread.WorksheetNotFound:
+        ws = ss.add_worksheet(title=name, rows=300, cols=max(8, len(SCHEMAS[name])))
     ws.clear()
     values = [df.columns.tolist()] + df.fillna("").astype(object).values.tolist()
     ws.append_rows(values, value_input_option="USER_ENTERED")
@@ -230,6 +235,7 @@ def init_sheets():
     save("purchase_orders", _seed_pos())
     save("po_items", _seed_items())
     save("assets", _seed_assets())
+    save("units", pd.DataFrame({"name": DEFAULT_UNITS}))
 
 
 # ============================ 種子資料 ============================
@@ -643,6 +649,46 @@ def page_suppliers(data):
             st.rerun()
 
 
+# ============================ 設定（單位管理） ============================
+def page_settings(data):
+    assets = data["assets"]
+    st.markdown("<h1>設定</h1><p style='color:#5A6472;margin-top:-8px'>管理使用單位；變更後採購、資產、單位配置等頁面會即時套用，不用改程式</p>", unsafe_allow_html=True)
+    st.markdown("<div class='sect'>使用單位</div>", unsafe_allow_html=True)
+
+    # 新增單位
+    c1, c2 = st.columns([4, 1])
+    new = c1.text_input("新增單位名稱", placeholder="例如：青年牧區", label_visibility="collapsed")
+    if c2.button("新增", type="primary", use_container_width=True, disabled=not new.strip()):
+        nm = new.strip()
+        if nm in UNITS:
+            flash(f"單位「{nm}」已存在")
+        else:
+            save("units", pd.DataFrame({"name": UNITS + [nm]}))
+            flash(f"已新增單位「{nm}」")
+        st.rerun()
+
+    st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+
+    # 既有單位清單 + 刪除
+    for u in UNITS:
+        cnt = int((assets["unit"] == u).sum())
+        col1, col2 = st.columns([4, 1])
+        col1.markdown(
+            f"<div class='card' style='padding:12px 16px;display:flex;justify-content:space-between;align-items:center'>"
+            f"<span style='font-weight:700'>🏢 {u}</span>"
+            f"<span style='color:{SUB};font-size:13px'>{cnt} 項資產使用中</span></div>",
+            unsafe_allow_html=True)
+        disabled = (cnt > 0) or (len(UNITS) <= 1)
+        if col2.button("刪除", key=f"del_unit_{u}", use_container_width=True, disabled=disabled):
+            save("units", pd.DataFrame({"name": [x for x in UNITS if x != u]}))
+            flash(f"已刪除單位「{u}」")
+            st.rerun()
+        if cnt > 0:
+            col2.caption("有資產使用中")
+
+    st.caption("提示：若要刪除某單位，請先到「資產」把該單位的資產改派到其他單位，數量歸零後才能刪除。")
+
+
 # ============================ 主程式 ============================
 def main():
     inject_css()
@@ -661,7 +707,7 @@ def main():
                     "<div><div class='brand-title'>行政後勤</div>"
                     "<div style='font-size:12px'>採購・資產整合平台</div></div></div>", unsafe_allow_html=True)
 
-        for label, icon in [("儀表板", "📊"), ("採購", "🛒"), ("資產", "📦"), ("供應商", "👥")]:
+        for label, icon in [("儀表板", "📊"), ("採購", "🛒"), ("資產", "📦"), ("供應商", "👥"), ("設定", "⚙️")]:
             active = st.session_state.page == label
             if st.button(f"{icon}\u2002{label}", key=f"nav_{label}", use_container_width=True,
                          type="primary" if active else "secondary"):
@@ -686,11 +732,17 @@ def main():
         st.exception(e)
         return
 
+    # 從 units 分頁載入單位清單（覆蓋預設）；沒有資料就用預設
+    global UNITS
+    unit_list = [u for u in data["units"]["name"].astype(str).tolist() if u.strip()]
+    UNITS = unit_list if unit_list else list(DEFAULT_UNITS)
+
     if all(data[n].empty for n in SCHEMAS):
         st.info("試算表是空的。請開啟左側「⚙️ 首次設定」並按「初始化試算表」建立範例資料。")
 
     {"儀表板": page_dashboard, "採購": page_procurement,
-     "資產": page_assets, "供應商": page_suppliers}[st.session_state.page](data)
+     "資產": page_assets, "供應商": page_suppliers,
+     "設定": page_settings}[st.session_state.page](data)
 
 
 if __name__ == "__main__":
