@@ -38,7 +38,7 @@ ATYPE_STYLE = {"固定資產": (INDIGO_SOFT, INDIGO), "一般資產": (LINE_SOFT
 
 SCHEMAS = {
     "suppliers":       ["id", "name", "tax_id", "contact", "phone", "note"],
-    "purchase_orders": ["id", "supplier_id", "date", "status", "purpose", "delivery_date", "note"],
+    "purchase_orders": ["id", "supplier_id", "date", "status", "purpose", "buyer", "note"],
     "po_items":        ["po_id", "name", "category", "qty", "price"],
     "assets":          ["id", "name", "category", "value", "source_po",
                         "acquired", "asset_type", "unit", "status"],
@@ -269,10 +269,10 @@ def _seed_suppliers():
 
 def _seed_pos():
     return pd.DataFrame([
-        ["PO-2026-001", "S1", "2026-04-12", "已驗收", "辦公室設備汰換", "2026-04-18", ""],
-        ["PO-2026-002", "S2", "2026-05-03", "已驗收", "主日場地桌椅", "2026-05-09", ""],
-        ["PO-2026-003", "S3", "2026-06-01", "待驗收", "敬拜團音響升級", "2026-06-15", "含現場安裝"],
-        ["PO-2026-004", "S4", "2026-06-06", "草稿", "主日文宣印製", "2026-06-12", ""],
+        ["PO-2026-001", "S1", "2026-04-12", "已驗收", "辦公室設備汰換", "王小明", ""],
+        ["PO-2026-002", "S2", "2026-05-03", "已驗收", "主日場地桌椅", "李美華", ""],
+        ["PO-2026-003", "S3", "2026-06-01", "待驗收", "敬拜團音響升級", "陳大同", "含現場安裝"],
+        ["PO-2026-004", "S4", "2026-06-06", "草稿", "主日文宣印製", "王小明", ""],
     ], columns=SCHEMAS["purchase_orders"])
 
 
@@ -414,13 +414,25 @@ def page_procurement(data):
     tab_list, tab_new = st.tabs(["採購單清單", "＋ 新增採購單"])
 
     with tab_list:
-        head = "<tr><th>單號</th><th>供應商</th><th>日期</th><th style='text-align:right'>金額</th><th style='text-align:center'>狀態</th></tr>"
+        q = st.text_input("搜尋", placeholder="輸入單號或採購人員姓名查詢…", label_visibility="collapsed")
+        rows = pos
+        if q.strip():
+            kw = q.strip()
+            rows = pos[pos["id"].astype(str).str.contains(kw, case=False, na=False)
+                       | pos["buyer"].astype(str).str.contains(kw, case=False, na=False)]
+        st.caption(f"{len(rows)} 張採購單")
+        head = ("<tr><th>單號</th><th>供應商</th><th>採購人員</th><th>採購日期</th>"
+                "<th style='text-align:right'>金額</th><th style='text-align:center'>狀態</th></tr>")
         body = ""
-        for r in pos.itertuples():
+        for r in rows.itertuples():
+            buyer = getattr(r, "buyer", "") or "—"
             body += (f"<tr><td style='font-weight:700'>{r.id}</td><td style='color:{SUB}'>{sup_name(sups, r.supplier_id)}</td>"
+                     f"<td style='color:{SUB}'>{buyer}</td>"
                      f"<td style='color:{SUB}'>{r.date}</td>"
                      f"<td style='text-align:right;font-weight:800;font-variant-numeric:tabular-nums'>{nt(po_total(items, r.id))}</td>"
                      f"<td style='text-align:center'>{pill(r.status, STATUS_STYLE)}</td></tr>")
+        if not body:
+            body = f"<tr><td colspan='6' style='text-align:center;color:{FAINT};padding:18px'>找不到符合的採購單</td></tr>"
         st.markdown(f"<div class='card' style='padding:4px'><table class='t'>{head}{body}</table></div>", unsafe_allow_html=True)
 
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
@@ -429,9 +441,9 @@ def page_procurement(data):
             po = pos[pos["id"] == sel].iloc[0]
             its = items[items["po_id"] == sel].copy()
             with st.container(border=True):
-                meta = f"{sup_name(sups, po['supplier_id'])} ・ 建立日 {po['date']}"
-                if po.get("delivery_date"):
-                    meta += f" ・ 交貨日 {po['delivery_date']}"
+                meta = f"{sup_name(sups, po['supplier_id'])} ・ 採購日期 {po['date']}"
+                if po.get("buyer"):
+                    meta += f" ・ 採購人員 {po['buyer']}"
                 purpose_html = f"<div style='margin:.2rem 0'><b>採購用途：</b>{po.get('purpose') or '—'}</div>"
                 note_html = f"<div style='color:{SUB}'><b>備註：</b>{po.get('note')}</div>" if po.get("note") else ""
                 st.markdown(f"<h3 style='margin:0'>{sel} &nbsp; {pill(po['status'], STATUS_STYLE)}</h3>"
@@ -459,9 +471,10 @@ def page_procurement(data):
             st.warning("尚無供應商，請先到「供應商」頁新增。")
             return
         chosen = st.selectbox("供應商", list(sup_map.keys()))
-        cc1, cc2 = st.columns(2)
+        cc1, cc2, cc3 = st.columns(3)
         purpose = cc1.text_input("採購用途（必填）", placeholder="例：敬拜團音響升級")
-        delivery = cc2.date_input("交貨日期", value=None, format="YYYY-MM-DD")
+        buyer = cc2.text_input("採購人員", placeholder="例：王小明")
+        purchase_date = cc3.date_input("採購日期", value=date.today(), format="YYYY-MM-DD")
         note = st.text_area("備註", placeholder="選填", height=70)
         st.caption("在下表新增品項（點最後一列空白處可新增）")
         edited = st.data_editor(
@@ -478,16 +491,16 @@ def page_procurement(data):
             st.caption("⚠️ 採購用途為必填")
         c1, c2 = st.columns(2)
         if c1.button("存為草稿", disabled=not ok, use_container_width=True):
-            _create_po(chosen, sup_map, valid, "草稿", pos, items, purpose, delivery, note)
+            _create_po(chosen, sup_map, valid, "草稿", pos, items, purpose, buyer, purchase_date, note)
         if c2.button("送出（待驗收）", type="primary", disabled=not ok, use_container_width=True):
-            _create_po(chosen, sup_map, valid, "待驗收", pos, items, purpose, delivery, note)
+            _create_po(chosen, sup_map, valid, "待驗收", pos, items, purpose, buyer, purchase_date, note)
 
 
-def _create_po(chosen, sup_map, valid, status, pos, items, purpose="", delivery=None, note=""):
+def _create_po(chosen, sup_map, valid, status, pos, items, purpose="", buyer="", purchase_date=None, note=""):
     new_id = next_po_id(pos)
-    dstr = delivery.isoformat() if delivery else ""
-    new_po = pd.DataFrame([[new_id, sup_map[chosen], date.today().isoformat(), status,
-                            purpose.strip(), dstr, (note or "").strip()]], columns=SCHEMAS["purchase_orders"])
+    dstr = purchase_date.isoformat() if purchase_date else date.today().isoformat()
+    new_po = pd.DataFrame([[new_id, sup_map[chosen], dstr, status,
+                            purpose.strip(), (buyer or "").strip(), (note or "").strip()]], columns=SCHEMAS["purchase_orders"])
     new_items = pd.DataFrame({"po_id": new_id, "name": valid["品名"].values, "category": valid["類別"].values,
                               "qty": valid["數量"].values, "price": valid["單價"].values})[SCHEMAS["po_items"]]
     save("purchase_orders", pd.concat([pos, new_po], ignore_index=True))
