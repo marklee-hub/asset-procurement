@@ -37,7 +37,7 @@ ASTATUS_STYLE = {"使用中": (JADE_SOFT, JADE), "維修中": (AMBER_SOFT, AMBER
 ATYPE_STYLE = {"固定資產": (INDIGO_SOFT, INDIGO), "一般資產": (LINE_SOFT, SUB)}
 
 SCHEMAS = {
-    "suppliers":       ["id", "name", "tax_id", "contact", "phone"],
+    "suppliers":       ["id", "name", "tax_id", "contact", "phone", "note"],
     "purchase_orders": ["id", "supplier_id", "date", "status", "purpose", "delivery_date", "note"],
     "po_items":        ["po_id", "name", "category", "qty", "price"],
     "assets":          ["id", "name", "category", "value", "source_po",
@@ -260,10 +260,10 @@ def init_sheets():
 # ============================ 種子資料 ============================
 def _seed_suppliers():
     return pd.DataFrame([
-        ["S1", "全美電腦資訊", "12345675", "王經理", "02-2222-3333"],
-        ["S2", "永興辦公家具", "23456781", "林小姐", "02-2555-6666"],
-        ["S3", "聲學音響工程", "34567892", "陳先生", "03-3333-4444"],
-        ["S4", "印刷大師文宣", "45678903", "李主任", "02-2888-9999"],
+        ["S1", "全美電腦資訊", "12345675", "王經理", "02-2222-3333", "配合多年，可月結"],
+        ["S2", "永興辦公家具", "23456781", "林小姐", "02-2555-6666", ""],
+        ["S3", "聲學音響工程", "34567892", "陳先生", "03-3333-4444", "報價含安裝"],
+        ["S4", "印刷大師文宣", "45678903", "李主任", "02-2888-9999", ""],
     ], columns=SCHEMAS["suppliers"])
 
 
@@ -637,12 +637,15 @@ def page_suppliers(data):
         cards = ""
         for s in sups.itertuples():
             n = int((pos["supplier_id"] == s.id).sum())
+            note = (getattr(s, "note", "") or "").strip()
+            note_html = (f"<div style='border-top:1px solid {LINE_SOFT};margin-top:10px;padding-top:10px;"
+                         f"color:{SUB};font-size:13px'>📝 {note}</div>") if note else ""
             cards += (f"<div class='card'><div style='display:flex;justify-content:space-between;align-items:flex-start'>"
                       f"<div><div style='font-weight:800;font-size:16px'>{s.name}</div>"
                       f"<div style='color:{SUB};font-size:12px;margin-top:2px'>統編 {s.tax_id}</div></div>"
                       f"<span class='pill' style='background:{JADE_SOFT};color:{JADE}'>{n} 張採購單</span></div>"
                       f"<div style='border-top:1px solid {LINE_SOFT};margin-top:12px;padding-top:12px;color:{SUB};font-size:14px;display:flex;gap:16px'>"
-                      f"<span>{s.contact}</span><span>{s.phone}</span></div></div>")
+                      f"<span>{s.contact}</span><span>{s.phone}</span></div>{note_html}</div>")
         st.markdown(f"<div class='grid2'>{cards}</div>", unsafe_allow_html=True)
 
         # ---- 點選供應商，查看其採購單 ----
@@ -681,6 +684,7 @@ def page_suppliers(data):
         c1, c2 = st.columns(2)
         contact = c1.text_input("聯絡人")
         phone = c2.text_input("電話")
+        note = st.text_area("備註", placeholder="例如：可月結、報價含安裝、配合多年…", height=80)
         tax_ok = tax.isdigit() and len(tax) == 8
         dup = tax in sups["tax_id"].astype(str).tolist()
         if tax and not tax_ok:
@@ -688,7 +692,7 @@ def page_suppliers(data):
         if dup:
             st.warning("此統編已存在")
         if st.button("新增", type="primary", disabled=not (name.strip() and tax_ok and not dup)):
-            new = pd.DataFrame([[f"S{len(sups) + 1}", name.strip(), tax, contact, phone]], columns=SCHEMAS["suppliers"])
+            new = pd.DataFrame([[f"S{len(sups) + 1}", name.strip(), tax, contact, phone, note.strip()]], columns=SCHEMAS["suppliers"])
             save("suppliers", pd.concat([sups, new], ignore_index=True))
             flash(f"已新增供應商「{name}」")
             st.rerun()
