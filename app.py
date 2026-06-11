@@ -414,12 +414,19 @@ def page_procurement(data):
     tab_list, tab_new = st.tabs(["採購單清單", "＋ 新增採購單"])
 
     with tab_list:
-        q = st.text_input("搜尋", placeholder="輸入單號或採購人員姓名查詢…", label_visibility="collapsed")
+        q = st.text_input("搜尋", placeholder="輸入單號、採購人員、供應商名稱或統一編號查詢…", label_visibility="collapsed")
         rows = pos
         if q.strip():
             kw = q.strip()
+            name_map = {str(s.id): s.name for s in sups.itertuples()}
+            tax_map = {str(s.id): str(s.tax_id) for s in sups.itertuples()}
+            sid = pos["supplier_id"].astype(str)
+            sname = sid.map(name_map).fillna("")
+            stax = sid.map(tax_map).fillna("")
             rows = pos[pos["id"].astype(str).str.contains(kw, case=False, na=False)
-                       | pos["buyer"].astype(str).str.contains(kw, case=False, na=False)]
+                       | pos["buyer"].astype(str).str.contains(kw, case=False, na=False)
+                       | sname.str.contains(kw, case=False, na=False)
+                       | stax.str.contains(kw, case=False, na=False)]
         st.caption(f"{len(rows)} 張採購單")
         head = ("<tr><th>單號</th><th>供應商</th><th>採購人員</th><th>採購日期</th>"
                 "<th style='text-align:right'>金額</th><th style='text-align:center'>狀態</th></tr>")
@@ -471,11 +478,11 @@ def page_procurement(data):
             st.warning("尚無供應商，請先到「供應商」頁新增。")
             return
         chosen = st.selectbox("供應商", list(sup_map.keys()))
-        cc1, cc2, cc3 = st.columns(3)
-        purpose = cc1.text_input("採購用途（必填）", placeholder="例：敬拜團音響升級")
-        buyer = cc2.text_input("採購人員", placeholder="例：王小明")
-        purchase_date = cc3.date_input("採購日期", value=date.today(), format="YYYY-MM-DD")
-        note = st.text_area("備註", placeholder="選填", height=70)
+        cc1, cc2 = st.columns(2)
+        buyer = cc1.text_input("採購人員", placeholder="例：王小明")
+        purchase_date = cc2.date_input("採購日期", value=date.today(), format="YYYY-MM-DD")
+        purpose = st.text_area("採購用途（必填）", placeholder="例：敬拜團音響升級，汰換老舊混音器與喇叭", height=120)
+        note = st.text_area("備註", placeholder="選填", height=68)
         st.caption("在下表新增品項（點最後一列空白處可新增）")
         edited = st.data_editor(
             pd.DataFrame([{"品名": "", "類別": "3C設備", "數量": 1, "單價": 0}]),
