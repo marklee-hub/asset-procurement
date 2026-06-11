@@ -571,12 +571,17 @@ def page_assets(data):
     tab_list, tab_board, tab_add = st.tabs(["資產清單", "單位配置（列管＋列帳）", "＋ 手動新增資產"])
 
     with tab_list:
+        aq = st.text_input("資產搜尋", placeholder="輸入資產名稱或財產編號（A26/B26）查詢…", label_visibility="collapsed")
         c1, c2, c3, c4 = st.columns(4)
         f_type = c1.selectbox("查詢範圍", ["總資產", "列管資產", "列帳資產"])
         f_cat = c2.selectbox("類別", ["全部"] + CATEGORIES)
         f_unit = c3.selectbox("使用單位", ["全部"] + UNITS)
         f_status = c4.selectbox("狀態", ["全部"] + ASSET_STATUS_OPTS)
         mask = pd.Series(True, index=assets.index)
+        if aq.strip():
+            kw = aq.strip()
+            mask &= (assets["name"].astype(str).str.contains(kw, case=False, na=False)
+                     | assets["id"].astype(str).str.contains(kw, case=False, na=False))
         if f_type != "總資產":  mask &= assets["asset_type"] == f_type
         if f_cat != "全部":    mask &= assets["category"] == f_cat
         if f_unit != "全部":   mask &= assets["unit"] == f_unit
@@ -613,28 +618,39 @@ def page_assets(data):
             st.info("沒有符合條件的資產")
 
     with tab_board:
-        st.markdown(f"<div style='background:{INDIGO_SOFT};color:{INDIGO};border-radius:12px;padding:10px 14px;"
-                    f"font-size:14px;font-weight:600'>用各單位欄位下方的選單即可把資產機動調整到別的單位。顯示使用中的列管＋列帳資產。</div>",
-                    unsafe_allow_html=True)
+        st.markdown(
+            f"<div style='display:flex;gap:16px;align-items:center;background:#fff;border:1px solid {LINE};"
+            f"border-radius:12px;padding:10px 14px;font-size:13px;font-weight:600'>"
+            f"<span style='color:{SUB};font-weight:500'>顯示使用中的資產，依分類標色（改派單位請至「資產清單」）：</span>"
+            f"<span style='display:inline-flex;align-items:center;gap:6px'><span style='width:12px;height:12px;border-radius:3px;background:{INDIGO};display:inline-block'></span>列帳資產 B26</span>"
+            f"<span style='display:inline-flex;align-items:center;gap:6px'><span style='width:12px;height:12px;border-radius:3px;background:{JADE};display:inline-block'></span>列管資產 A26</span>"
+            f"</div>",
+            unsafe_allow_html=True)
+        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
         fixed = assets[(assets["asset_type"].isin(ASSET_RECORD_CLASSES)) & (assets["status"] != "已報廢")]
         cols = st.columns(len(UNITS))
         for i, u in enumerate(UNITS):
             with cols[i]:
                 sub = fixed[fixed["unit"] == u]
-                st.markdown(f"<div class='unit-head'><span>🏢 {u}</span><span style='color:{FAINT};font-size:12px'>{len(sub)} 件</span></div>"
-                            f"<div style='color:{INDIGO};font-size:12px;font-weight:700;margin-bottom:6px'>{nt(sub['value'].sum())}</div>",
-                            unsafe_allow_html=True)
+                ledger = sub[sub["asset_type"] == "列帳資產"]
+                managed = sub[sub["asset_type"] == "列管資產"]
+                st.markdown(
+                    f"<div class='unit-head'><span>🏢 {u}</span><span style='color:{FAINT};font-size:12px'>{len(sub)} 件</span></div>"
+                    f"<div style='font-size:11px;font-weight:700;margin-bottom:8px;line-height:1.6'>"
+                    f"<span style='color:{INDIGO}'>列帳 {nt(ledger['value'].sum())}</span><br>"
+                    f"<span style='color:{JADE}'>列管 {nt(managed['value'].sum())}</span></div>",
+                    unsafe_allow_html=True)
                 for a in sub.to_dict("records"):
-                    st.markdown(f"<div class='acard' style='padding:10px'><div style='font-weight:700;font-size:13px'>{a['name']}</div>"
-                                f"<div style='color:{SUB};font-size:11px;font-variant-numeric:tabular-nums'>{a['id']} ・ {nt(a['value'])}</div></div>",
-                                unsafe_allow_html=True)
-                    nu = st.selectbox("移到", UNITS, index=i, key=f"mv_{a['id']}", label_visibility="collapsed")
-                    if nu != u:
-                        upd = assets.set_index("id")
-                        upd.loc[a["id"], "unit"] = nu
-                        save("assets", upd.reset_index()[SCHEMAS["assets"]])
-                        flash(f"{a['id']} 已移至 {nu}")
-                        st.rerun()
+                    is_ledger = a["asset_type"] == "列帳資產"
+                    accent = INDIGO if is_ledger else JADE
+                    soft = INDIGO_SOFT if is_ledger else JADE_SOFT
+                    st.markdown(
+                        f"<div class='acard' style='padding:10px;border-left:4px solid {accent}'>"
+                        f"<div style='display:flex;justify-content:space-between;align-items:flex-start;gap:6px'>"
+                        f"<div style='font-weight:700;font-size:13px'>{a['name']}</div>"
+                        f"<span style='background:{soft};color:{accent};font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;white-space:nowrap'>{a['asset_type']}</span></div>"
+                        f"<div style='color:{SUB};font-size:11px;font-variant-numeric:tabular-nums;margin-top:2px'>{a['id']} ・ {nt(a['value'])}</div></div>",
+                        unsafe_allow_html=True)
 
     with tab_add:
         st.markdown(f"<div style='color:{SUB};font-size:14px;margin-bottom:6px'>登錄以前就買好、不是透過本系統採購的舊資產。來源會標記為「手動新增」。耗材不在此登錄。</div>", unsafe_allow_html=True)
@@ -647,6 +663,8 @@ def page_assets(data):
                                 help="一次新增多筆相同資產（會各給一個獨立財產編號）")
         a5, a6 = st.columns(2)
         default_class = "列帳資產" if m_value >= LEDGER_THRESHOLD else "列管資產"
+        if m_value >= LEDGER_THRESHOLD:
+            st.info(f"💡 金額已達 {nt(LEDGER_THRESHOLD)}，建議分類為「列帳資產」（編號 B26）。已自動帶入，如需調整可改選下方分類。")
         m_type = a5.radio("資產分類", ASSET_RECORD_CLASSES, index=ASSET_RECORD_CLASSES.index(default_class),
                           horizontal=True, key="m_type",
                           help=f"≥ {nt(LEDGER_THRESHOLD)} 建議列帳資產（B26）；其餘列管資產（A26）")
