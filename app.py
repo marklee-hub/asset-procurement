@@ -22,19 +22,22 @@ AMBER, AMBER_SOFT = "#B45309", "#FBEEDC"
 INDIGO, INDIGO_SOFT = "#4338CA", "#E7E7FA"
 DANGER = "#B42318"
 
-CATEGORIES = ["3C設備", "辦公家具", "音響設備", "文宣耗材"]
+CATEGORIES = ["3C設備", "辦公家具", "音響設備", "文宣品", "其他"]
 DEFAULT_UNITS = ["傳道部", "行銷部", "影音部", "行政部", "神學院", "財務部"]
 UNITS = list(DEFAULT_UNITS)   # 啟動時會從 Google Sheet 的 units 分頁覆蓋
-FIXED_THRESHOLD = 10000
-TRACKED = [c for c in CATEGORIES if c != "文宣耗材"]
+LEDGER_THRESHOLD = 80000      # ≥ 此金額預設為「列帳資產」
+
+# 資產分類（採購／手動可選三種；其中「一般耗材」不列管、不給編號、不進資產清單）
+ASSET_CLASS_OPTS = ["列管資產", "列帳資產", "一般耗材"]
+ASSET_RECORD_CLASSES = ["列管資產", "列帳資產"]          # 會給財產編號並進入資產清單
+CLASS_PREFIX = {"列管資產": "A26", "列帳資產": "B26"}     # 列管 A26-xxxx／列帳 B26-xxxx
 
 STATUS_OPTS = ["草稿", "待驗收", "已驗收"]
 ASSET_STATUS_OPTS = ["使用中", "維修中", "已報廢"]
-ASSET_TYPE_OPTS = ["固定資產", "一般資產"]
 
 STATUS_STYLE = {"草稿": (LINE_SOFT, SUB), "待驗收": (AMBER_SOFT, AMBER), "已驗收": (JADE_SOFT, JADE)}
 ASTATUS_STYLE = {"使用中": (JADE_SOFT, JADE), "維修中": (AMBER_SOFT, AMBER), "已報廢": ("#F3EDED", DANGER)}
-ATYPE_STYLE = {"固定資產": (INDIGO_SOFT, INDIGO), "一般資產": (LINE_SOFT, SUB)}
+ATYPE_STYLE = {"列帳資產": (INDIGO_SOFT, INDIGO), "列管資產": (JADE_SOFT, JADE), "一般耗材": (LINE_SOFT, SUB)}
 
 SCHEMAS = {
     "suppliers":       ["id", "name", "tax_id", "contact", "phone", "note"],
@@ -285,28 +288,30 @@ def _seed_items():
         ["PO-2026-002", "堆疊摺疊椅", "辦公家具", 8, 500],
         ["PO-2026-003", "無線麥克風", "音響設備", 4, 3500],
         ["PO-2026-003", "數位混音器", "音響設備", 1, 18000],
-        ["PO-2026-004", "主日文宣海報", "文宣耗材", 500, 12],
+        ["PO-2026-004", "主日文宣海報", "文宣品", 500, 12],
     ], columns=SCHEMAS["po_items"])
 
 
 def _seed_assets():
-    rows, n = [], 1
+    rows = []
+    seq = {"A26": 1, "B26": 1}
 
-    def mk(name, cat, val, po, d, atype, unit, status="使用中"):
-        nonlocal n
-        rows.append([f"A26-{n:04d}", name, cat, val, po, d, atype, unit, status])
-        n += 1
+    def mk(name, cat, val, po, d, aclass, unit, status="使用中"):
+        prefix = CLASS_PREFIX[aclass]
+        rows.append([f"{prefix}-{seq[prefix]:04d}", name, cat, val, po, d, aclass, unit, status])
+        seq[prefix] += 1
 
-    mk("筆記型電腦", "3C設備", 28000, "PO-2026-001", "2026-04-18", "固定資產", "行政辦公室")
-    mk("筆記型電腦", "3C設備", 28000, "PO-2026-001", "2026-04-18", "固定資產", "媒體組", "維修中")
-    mk("短焦投影機", "3C設備", 24000, "PO-2026-001", "2026-04-18", "固定資產", "主堂")
-    mk("短焦投影機", "3C設備", 24000, "PO-2026-001", "2026-04-18", "固定資產", "兒童主日學")
-    mk("雷射印表機", "3C設備", 15000, "PO-2026-001", "2026-04-18", "固定資產", "行政辦公室")
+    mk("伺服器主機", "3C設備", 95000, "PO-2026-001", "2026-04-18", "列帳資產", "行政部")
+    mk("筆記型電腦", "3C設備", 28000, "PO-2026-001", "2026-04-18", "列管資產", "行政部")
+    mk("筆記型電腦", "3C設備", 28000, "PO-2026-001", "2026-04-18", "列管資產", "影音部", "維修中")
+    mk("短焦投影機", "3C設備", 24000, "PO-2026-001", "2026-04-18", "列管資產", "傳道部")
+    mk("專業混音器", "音響設備", 88000, "PO-2026-001", "2026-04-18", "列帳資產", "影音部")
+    mk("雷射印表機", "3C設備", 15000, "PO-2026-001", "2026-04-18", "列管資產", "行政部")
     for i in range(4):
-        mk("折疊長桌", "辦公家具", 1800, "PO-2026-002", "2026-05-09", "一般資產", UNITS[i % len(UNITS)])
-    for i in range(8):
-        mk("堆疊摺疊椅", "辦公家具", 500, "PO-2026-002", "2026-05-09", "一般資產", UNITS[i % len(UNITS)],
-           "已報廢" if i == 7 else "使用中")
+        mk("折疊長桌", "辦公家具", 1800, "PO-2026-002", "2026-05-09", "列管資產", UNITS[i % len(UNITS)])
+    for i in range(6):
+        mk("堆疊摺疊椅", "辦公家具", 500, "PO-2026-002", "2026-05-09", "列管資產", UNITS[i % len(UNITS)],
+           "已報廢" if i == 5 else "使用中")
     return pd.DataFrame(rows, columns=SCHEMAS["assets"])
 
 
@@ -324,11 +329,21 @@ def next_po_id(pos):
     return f"PO-{yr}-{seq:03d}"
 
 
-def next_asset_seq(assets):
+def next_asset_seq(assets, prefix="A26"):
     if assets.empty:
         return 1
-    nums = assets["id"].astype(str).str.extract(r"A26-(\d+)")[0].dropna().astype(int)
+    nums = assets["id"].astype(str).str.extract(rf"{prefix}-(\d+)")[0].dropna().astype(int)
     return (nums.max() + 1) if len(nums) else 1
+
+
+def new_asset_id(assets, asset_class, used=None):
+    """依分類取下一個編號：列管 A26-xxxx／列帳 B26-xxxx。used 為本批已配發的編號集合。"""
+    prefix = CLASS_PREFIX.get(asset_class, "A26")
+    seq = next_asset_seq(assets, prefix)
+    used = used or set()
+    while f"{prefix}-{seq:04d}" in used:
+        seq += 1
+    return f"{prefix}-{seq:04d}", prefix
 
 
 def po_total(items, po_id):
@@ -349,8 +364,8 @@ def page_dashboard(data):
     spend = sum(po_total(items, p) for p in received)
     pending_amt = sum(po_total(items, p) for p in pending)
     live = assets[assets["status"] != "已報廢"]
-    fixed_val = live[live["asset_type"] == "固定資產"]["value"].sum()
-    gen_val = live[live["asset_type"] == "一般資產"]["value"].sum()
+    ledger_val = live[live["asset_type"] == "列帳資產"]["value"].sum()
+    managed_val = live[live["asset_type"] == "列管資產"]["value"].sum()
 
     st.markdown("<h1>儀表板</h1><p style='color:#5A6472;margin-top:-8px'>採購支出與資產價值一覽</p>", unsafe_allow_html=True)
 
@@ -362,8 +377,8 @@ def page_dashboard(data):
     st.markdown(
         "<div class='grid4'>"
         + stat("本年採購支出", nt(spend), AMBER, "已驗收採購單")
-        + stat("固定資產總值", nt(fixed_val), INDIGO, "可調整使用單位")
-        + stat("一般資產總值", nt(gen_val), JADE, "排除已報廢")
+        + stat("列帳資產總值", nt(ledger_val), INDIGO, "≥ 8 萬列帳")
+        + stat("列管資產總值", nt(managed_val), JADE, "排除已報廢")
         + stat("待驗收金額", nt(pending_amt), f"{len(pending)} 張單 ・ {len(sups)} 家供應商")
         + "</div>", unsafe_allow_html=True)
 
@@ -377,8 +392,8 @@ def page_dashboard(data):
         "<div class='card' style='margin-top:14px'><div class='sect'>採購到資產的轉換</div><div class='flow'>"
         + fc(AMBER_SOFT, AMBER, "採購支出", nt(spend)) + arrow
         + fc(LINE_SOFT, SUB, "驗收分類", f"{len(received)} 張單") + arrow
-        + fc(INDIGO_SOFT, INDIGO, "固定資產", nt(fixed_val))
-        + fc(JADE_SOFT, JADE, "一般資產", nt(gen_val))
+        + fc(INDIGO_SOFT, INDIGO, "列帳資產", nt(ledger_val))
+        + fc(JADE_SOFT, JADE, "列管資產", nt(managed_val))
         + "</div></div>", unsafe_allow_html=True)
 
     left, right = st.columns([3, 2])
@@ -386,7 +401,7 @@ def page_dashboard(data):
         with st.container(border=True):
             st.markdown("<div class='sect'>各類別：採購支出 vs 資產價值</div>", unsafe_allow_html=True)
             rows = []
-            for cat in TRACKED:
+            for cat in CATEGORIES:
                 sp = sum((items[(items["po_id"] == p) & (items["category"] == cat)]["qty"]
                           * items[(items["po_id"] == p) & (items["category"] == cat)]["price"]).sum() for p in received)
                 rows.append({"類別": cat, "採購支出": sp, "資產價值": live[live["category"] == cat]["value"].sum()})
@@ -410,7 +425,7 @@ def page_dashboard(data):
 # ============================ 採購 ============================
 def page_procurement(data):
     pos, items, assets, sups = data["purchase_orders"], data["po_items"], data["assets"], data["suppliers"]
-    st.markdown("<h1>採購</h1><p style='color:#5A6472;margin-top:-8px'>採購單管理；驗收時分類為固定／一般資產</p>", unsafe_allow_html=True)
+    st.markdown("<h1>採購</h1><p style='color:#5A6472;margin-top:-8px'>採購單管理；驗收時分類為列管／列帳資產或一般耗材</p>", unsafe_allow_html=True)
     tab_list, tab_new = st.tabs(["採購單清單", "＋ 新增採購單"])
 
     with tab_list:
@@ -459,8 +474,7 @@ def page_procurement(data):
                             unsafe_allow_html=True)
                 rowhtml = ""
                 for it in its.itertuples():
-                    tag = "" if it.category in TRACKED else f"<span style='color:{FAINT};font-size:12px'>（耗材・不列管）</span>"
-                    rowhtml += (f"<tr><td style='font-weight:600'>{it.name} {tag}</td><td style='color:{SUB}'>{it.category}</td>"
+                    rowhtml += (f"<tr><td style='font-weight:600'>{it.name}</td><td style='color:{SUB}'>{it.category}</td>"
                                 f"<td style='text-align:right;font-variant-numeric:tabular-nums'>{int(it.qty)}</td>"
                                 f"<td style='text-align:right;font-variant-numeric:tabular-nums'>{nt(it.price)}</td>"
                                 f"<td style='text-align:right;font-weight:700;font-variant-numeric:tabular-nums'>{nt(it.qty * it.price)}</td></tr>")
@@ -518,34 +532,35 @@ def _create_po(chosen, sup_map, valid, status, pos, items, purpose="", buyer="",
 
 def _receive_form(po_id, its, pos, assets):
     st.markdown(f"<div class='sect' style='margin-top:14px'>驗收入庫</div>", unsafe_allow_html=True)
-    st.caption(f"逐項確認分類與使用單位（單價 ≥ {nt(FIXED_THRESHOLD)} 預設為固定資產），耗材不列管。")
-    tracked = its[its["category"].isin(TRACKED)].reset_index(drop=True)
-    skipped = its[~its["category"].isin(TRACKED)]
+    st.caption(f"逐項選擇分類（單價 ≥ {nt(LEDGER_THRESHOLD)} 預設「列帳資產」）。列管→A26、列帳→B26 給編號；一般耗材不列管、不入庫。")
+    rows_all = its.reset_index(drop=True)
     choices = {}
-    for i, r in enumerate(tracked.itertuples()):
+    for i, r in enumerate(rows_all.itertuples()):
         with st.container(border=True):
             st.markdown(f"<b>{r.name}</b> <span style='color:{FAINT};font-size:12px'>×{int(r.qty)} ・ {nt(r.price)} ・ {r.category}</span>", unsafe_allow_html=True)
-            c1, c2 = st.columns([1.2, 1])
-            default = "固定資產" if r.price >= FIXED_THRESHOLD else "一般資產"
-            atype = c1.radio("分類", ASSET_TYPE_OPTS, index=ASSET_TYPE_OPTS.index(default),
-                             key=f"t_{po_id}_{i}", horizontal=True, label_visibility="collapsed")
+            c1, c2 = st.columns([1.4, 1])
+            default = "列帳資產" if r.price >= LEDGER_THRESHOLD else "列管資產"
+            aclass = c1.radio("分類", ASSET_CLASS_OPTS, index=ASSET_CLASS_OPTS.index(default),
+                              key=f"t_{po_id}_{i}", horizontal=True, label_visibility="collapsed")
             unit = c2.selectbox("單位", UNITS, key=f"u_{po_id}_{i}", label_visibility="collapsed")
-            choices[i] = (atype, unit)
-    if not skipped.empty:
-        st.caption("不列管（耗材）：" + "、".join(skipped["name"].tolist()))
+            choices[i] = (aclass, unit)
     if st.button("確認入庫", type="primary", key=f"recv_{po_id}", use_container_width=True):
-        seq = next_asset_seq(assets)
-        new_rows = []
-        for i, r in enumerate(tracked.itertuples()):
-            atype, unit = choices[i]
+        new_rows, used = [], set()
+        for i, r in enumerate(rows_all.itertuples()):
+            aclass, unit = choices[i]
+            if aclass not in ASSET_RECORD_CLASSES:      # 一般耗材：不入庫
+                continue
             for _ in range(int(r.qty)):
-                new_rows.append([f"A26-{seq:04d}", r.name, r.category, r.price, po_id,
-                                 date.today().isoformat(), atype, unit, "使用中"])
-                seq += 1
-        save("assets", pd.concat([assets, pd.DataFrame(new_rows, columns=SCHEMAS["assets"])], ignore_index=True))
+                aid, _p = new_asset_id(assets, aclass, used)
+                used.add(aid)
+                new_rows.append([aid, r.name, r.category, r.price, po_id,
+                                 date.today().isoformat(), aclass, unit, "使用中"])
+        if new_rows:
+            save("assets", pd.concat([assets, pd.DataFrame(new_rows, columns=SCHEMAS["assets"])], ignore_index=True))
         save("purchase_orders", pos.assign(status=pos["status"].where(pos["id"] != po_id, "已驗收")))
-        f = sum(1 for r in new_rows if r[6] == "固定資產")
-        flash(f"{po_id} 已驗收入庫：固定資產 {f} 筆、一般資產 {len(new_rows) - f} 筆")
+        nb = sum(1 for r in new_rows if r[6] == "列帳資產")
+        na = sum(1 for r in new_rows if r[6] == "列管資產")
+        flash(f"{po_id} 已驗收入庫：列帳資產 {nb} 筆、列管資產 {na} 筆")
         st.rerun()
 
 
@@ -553,21 +568,22 @@ def _receive_form(po_id, its, pos, assets):
 def page_assets(data):
     assets = data["assets"]
     st.markdown("<h1>資產</h1><p style='color:#5A6472;margin-top:-8px'>所有列管資產皆可追溯來源採購單</p>", unsafe_allow_html=True)
-    tab_list, tab_board, tab_add = st.tabs(["資產清單", "單位配置（固定資產）", "＋ 手動新增資產"])
+    tab_list, tab_board, tab_add = st.tabs(["資產清單", "單位配置（列管＋列帳）", "＋ 手動新增資產"])
 
     with tab_list:
         c1, c2, c3, c4 = st.columns(4)
-        f_type = c1.selectbox("類型", ["全部"] + ASSET_TYPE_OPTS)
-        f_cat = c2.selectbox("類別", ["全部"] + TRACKED)
+        f_type = c1.selectbox("查詢範圍", ["總資產", "列管資產", "列帳資產"])
+        f_cat = c2.selectbox("類別", ["全部"] + CATEGORIES)
         f_unit = c3.selectbox("使用單位", ["全部"] + UNITS)
         f_status = c4.selectbox("狀態", ["全部"] + ASSET_STATUS_OPTS)
         mask = pd.Series(True, index=assets.index)
-        if f_type != "全部":   mask &= assets["asset_type"] == f_type
+        if f_type != "總資產":  mask &= assets["asset_type"] == f_type
         if f_cat != "全部":    mask &= assets["category"] == f_cat
         if f_unit != "全部":   mask &= assets["unit"] == f_unit
         if f_status != "全部": mask &= assets["status"] == f_status
         view = assets[mask]
-        st.caption(f"{len(view)} 筆")
+        total_val = view[view["status"] != "已報廢"]["value"].sum()
+        st.caption(f"{len(view)} 筆 ・ 合計（排除已報廢）{nt(total_val)}")
 
         cols = st.columns(3)
         for i, a in enumerate(view.to_dict("records")):
@@ -598,9 +614,9 @@ def page_assets(data):
 
     with tab_board:
         st.markdown(f"<div style='background:{INDIGO_SOFT};color:{INDIGO};border-radius:12px;padding:10px 14px;"
-                    f"font-size:14px;font-weight:600'>用各單位欄位下方的選單即可把固定資產機動調整到別的單位。僅顯示使用中的固定資產。</div>",
+                    f"font-size:14px;font-weight:600'>用各單位欄位下方的選單即可把資產機動調整到別的單位。顯示使用中的列管＋列帳資產。</div>",
                     unsafe_allow_html=True)
-        fixed = assets[(assets["asset_type"] == "固定資產") & (assets["status"] != "已報廢")]
+        fixed = assets[(assets["asset_type"].isin(ASSET_RECORD_CLASSES)) & (assets["status"] != "已報廢")]
         cols = st.columns(len(UNITS))
         for i, u in enumerate(UNITS):
             with cols[i]:
@@ -621,29 +637,32 @@ def page_assets(data):
                         st.rerun()
 
     with tab_add:
-        st.markdown(f"<div style='color:{SUB};font-size:14px;margin-bottom:6px'>登錄以前就買好、不是透過本系統採購的舊資產。來源會標記為「手動新增」。</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='color:{SUB};font-size:14px;margin-bottom:6px'>登錄以前就買好、不是透過本系統採購的舊資產。來源會標記為「手動新增」。耗材不在此登錄。</div>", unsafe_allow_html=True)
         a1, a2 = st.columns(2)
         m_name = a1.text_input("品名", key="m_name", placeholder="例如：筆記型電腦")
-        m_cat = a2.selectbox("類別", TRACKED, key="m_cat")
+        m_cat = a2.selectbox("類別", CATEGORIES, key="m_cat")
         a3, a4 = st.columns(2)
-        m_type = a3.radio("資產分類", ASSET_TYPE_OPTS, horizontal=True, key="m_type")
-        m_status = a4.selectbox("狀態", ASSET_STATUS_OPTS, key="m_status")
-        a5, a6 = st.columns(2)
-        m_unit = a5.selectbox("使用單位", UNITS, key="m_unit")
-        m_acq = a6.date_input("取得日期", key="m_acq")
-        a7, a8 = st.columns(2)
-        m_value = a7.number_input("單筆價值（NT$）", min_value=0, step=100, key="m_value")
-        m_qty = a8.number_input("數量", min_value=1, step=1, value=1, key="m_qty",
+        m_value = a3.number_input("單筆價值（NT$）", min_value=0, step=100, key="m_value")
+        m_qty = a4.number_input("數量", min_value=1, step=1, value=1, key="m_qty",
                                 help="一次新增多筆相同資產（會各給一個獨立財產編號）")
+        a5, a6 = st.columns(2)
+        default_class = "列帳資產" if m_value >= LEDGER_THRESHOLD else "列管資產"
+        m_type = a5.radio("資產分類", ASSET_RECORD_CLASSES, index=ASSET_RECORD_CLASSES.index(default_class),
+                          horizontal=True, key="m_type",
+                          help=f"≥ {nt(LEDGER_THRESHOLD)} 建議列帳資產（B26）；其餘列管資產（A26）")
+        m_status = a6.selectbox("狀態", ASSET_STATUS_OPTS, key="m_status")
+        a7, a8 = st.columns(2)
+        m_unit = a7.selectbox("使用單位", UNITS, key="m_unit")
+        m_acq = a8.date_input("取得日期", key="m_acq")
         if st.button("新增資產", type="primary", disabled=not m_name.strip()):
-            seq = next_asset_seq(assets)
-            rows = []
+            rows, used = [], set()
             for _ in range(int(m_qty)):
-                rows.append([f"A26-{seq:04d}", m_name.strip(), m_cat, m_value, "手動新增",
+                aid, _p = new_asset_id(assets, m_type, used)
+                used.add(aid)
+                rows.append([aid, m_name.strip(), m_cat, m_value, "手動新增",
                              m_acq.isoformat(), m_type, m_unit, m_status])
-                seq += 1
             save("assets", pd.concat([assets, pd.DataFrame(rows, columns=SCHEMAS["assets"])], ignore_index=True))
-            flash(f"已新增 {len(rows)} 筆「{m_name.strip()}」資產")
+            flash(f"已新增 {len(rows)} 筆「{m_name.strip()}」{m_type}")
             st.rerun()
 
 
