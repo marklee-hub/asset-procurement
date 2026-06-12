@@ -732,8 +732,15 @@ def page_suppliers(data):
     tab_list, tab_new = st.tabs(["清單", "＋ 新增供應商"])
 
     with tab_list:
+        sq = st.text_input("供應商搜尋", placeholder="輸入公司名稱或統一編號查詢…", label_visibility="collapsed")
+        shown = sups
+        if sq.strip():
+            kw = sq.strip()
+            shown = sups[sups["name"].astype(str).str.contains(kw, case=False, na=False)
+                         | sups["tax_id"].astype(str).str.contains(kw, case=False, na=False)]
+        st.caption(f"{len(shown)} 家供應商")
         cards = ""
-        for s in sups.itertuples():
+        for s in shown.itertuples():
             n = int((pos["supplier_id"] == s.id).sum())
             note = (getattr(s, "note", "") or "").strip()
             note_html = (f"<div style='border-top:1px solid {LINE_SOFT};margin-top:10px;padding-top:10px;"
@@ -744,7 +751,10 @@ def page_suppliers(data):
                       f"<span class='pill' style='background:{JADE_SOFT};color:{JADE}'>{n} 張採購單</span></div>"
                       f"<div style='border-top:1px solid {LINE_SOFT};margin-top:12px;padding-top:12px;color:{SUB};font-size:14px;display:flex;gap:16px'>"
                       f"<span>{s.contact}</span><span>{s.phone}</span></div>{note_html}</div>")
-        st.markdown(f"<div class='grid2'>{cards}</div>", unsafe_allow_html=True)
+        if cards:
+            st.markdown(f"<div class='grid2'>{cards}</div>", unsafe_allow_html=True)
+        else:
+            st.info("找不到符合的供應商")
 
         # ---- 點選供應商，查看其採購單 ----
         st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
