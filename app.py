@@ -9,7 +9,7 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
-from datetime import date
+from datetime import date, datetime
 
 # ============================ 設定 ============================
 st.set_page_config(page_title="採購・資產整合平台", page_icon="📦", layout="wide")
@@ -35,8 +35,8 @@ CLASS_PREFIX = {"列管資產": "A26", "列帳資產": "B26"}     # 列管 A26-x
 STATUS_OPTS = ["草稿", "待驗收", "已驗收"]
 ASSET_STATUS_OPTS = ["使用中", "維修中", "已報廢"]
 
-STATUS_STYLE = {"草稿": (LINE_SOFT, SUB), "待驗收": (AMBER_SOFT, AMBER), "已驗收": (JADE_SOFT, JADE)}
-ASTATUS_STYLE = {"使用中": (JADE_SOFT, JADE), "維修中": (AMBER_SOFT, AMBER), "已報廢": ("#F3EDED", DANGER)}
+STATUS_STYLE = {"草稿": (LINE_SOFT, SUB), "待驗收": (AMBER_SOFT, AMBER), "已驗收": (JADE_SOFT, JADE), "已作廢": ("#F3EDED", DANGER)}
+ASTATUS_STYLE = {"使用中": (JADE_SOFT, JADE), "維修中": (AMBER_SOFT, AMBER), "已報廢": ("#F3EDED", DANGER), "已作廢": ("#F3EDED", DANGER)}
 ATYPE_STYLE = {"列帳資產": (INDIGO_SOFT, INDIGO), "列管資產": (JADE_SOFT, JADE), "一般耗材": (LINE_SOFT, SUB)}
 
 SCHEMAS = {
@@ -46,6 +46,8 @@ SCHEMAS = {
     "assets":          ["id", "name", "category", "value", "source_po",
                         "acquired", "asset_type", "unit", "status"],
     "units":           ["name"],
+    "void_requests":   ["req_id", "target_type", "target_id", "reason",
+                        "requested_by", "requested_at", "status"],
 }
 NUMERIC = {"po_items": ["qty", "price"], "assets": ["value"]}
 
@@ -329,6 +331,25 @@ def next_po_id(pos):
     return f"PO-{yr}-{seq:03d}"
 
 
+def has_pending_void(data, target_type, target_id):
+    """該採購單／資產是否已有待審的作廢申請。"""
+    vr = data.get("void_requests")
+    if vr is None or vr.empty:
+        return False
+    m = ((vr["target_type"] == target_type) & (vr["target_id"].astype(str) == str(target_id))
+         & (vr["status"] == "待審核"))
+    return bool(m.any())
+
+
+def submit_void_request(data, target_type, target_id, reason, by="前台"):
+    vr = data["void_requests"]
+    rid = f"VR-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    row = pd.DataFrame([[rid, target_type, str(target_id), reason.strip(), by,
+                         datetime.now().strftime("%Y-%m-%d %H:%M"), "待審核"]],
+                       columns=SCHEMAS["void_requests"])
+    save("void_requests", pd.concat([vr, row], ignore_index=True))
+
+
 def next_asset_seq(assets, prefix="A26"):
     if assets.empty:
         return 1
@@ -363,7 +384,7 @@ def page_dashboard(data):
     pending = pos[pos["status"] == "待驗收"]["id"].tolist()
     spend = sum(po_total(items, p) for p in received)
     pending_amt = sum(po_total(items, p) for p in pending)
-    live = assets[assets["status"] != "已報廢"]
+    live = assets[~assets["status"].isin(["已報廢", "已作廢"])]
     ledger_val = live[live["asset_type"] == "列帳資產"]["value"].sum()
     managed_val = live[live["asset_type"] == "列管資產"]["value"].sum()
 
@@ -486,6 +507,20 @@ def page_procurement(data):
                 if po["status"] == "待驗收":
                     _receive_form(sel, its, pos, assets)
 
+                st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+                if po["status"] == "已作廢":
+                    st.caption("此採購單已作廢。")
+                elif has_pending_void(data, "採購單", sel):
+                    st.info("⏳ 此採購單已有待審核的作廢申請，請等待管理者處理。")
+                else:
+                    with st.expander("🗑️ 申請作廢這張採購單"):
+                        st.caption("送出後不會立即作廢，需由管理者在「作廢申請」頁審核。")
+                        vr_reason = st.text_area("作廢原因", key=f"vreason_po_{sel}", placeholder="例如：供應商或金額填錯、重複建立…")
+                        if st.button("送出作廢申請", key=f"vbtn_po_{sel}", disabled=not vr_reason.strip()):
+                            submit_void_request(data, "採購單", sel, vr_reason)
+                            flash("已送出作廢申請，待管理者審核")
+                            st.rerun()
+
     with tab_new:
         sup_map = {sup_name(sups, r.id): r.id for r in sups.itertuples()}
         if not sup_map:
@@ -602,6 +637,9 @@ def page_assets(data):
                     f"<span>取得 {a['acquired']}</span><span class='aval'>{nt(a['value'])}</span></div>"
                     f"<div style='font-size:12px;color:{JADE};font-weight:700;margin-top:4px'>📄 {a['source_po']}</div></div>",
                     unsafe_allow_html=True)
+                if a["status"] == "已作廢":
+                    st.caption("此資產已作廢。")
+                    continue
                 u, s = st.columns(2)
                 nu = u.selectbox("單位", UNITS, index=UNITS.index(a["unit"]) if a["unit"] in UNITS else 0,
                                  key=f"lu_{a['id']}", label_visibility="collapsed")
@@ -614,6 +652,15 @@ def page_assets(data):
                     save("assets", upd.reset_index()[SCHEMAS["assets"]])
                     flash(f"已更新資產 {a['id']}")
                     st.rerun()
+                if has_pending_void(data, "資產", a["id"]):
+                    st.caption("⏳ 作廢申請審核中")
+                else:
+                    with st.expander("🗑️ 申請作廢"):
+                        vr_reason = st.text_input("作廢原因", key=f"vreason_as_{a['id']}", placeholder="填錯／重複登錄…")
+                        if st.button("送出申請", key=f"vbtn_as_{a['id']}", disabled=not vr_reason.strip()):
+                            submit_void_request(data, "資產", a["id"], vr_reason)
+                            flash("已送出作廢申請，待管理者審核")
+                            st.rerun()
         if view.empty:
             st.info("沒有符合條件的資產")
 
@@ -627,7 +674,7 @@ def page_assets(data):
             f"</div>",
             unsafe_allow_html=True)
         st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-        fixed = assets[(assets["asset_type"].isin(ASSET_RECORD_CLASSES)) & (assets["status"] != "已報廢")]
+        fixed = assets[(assets["asset_type"].isin(ASSET_RECORD_CLASSES)) & (~assets["status"].isin(["已報廢", "已作廢"]))]
         cols = st.columns(len(UNITS))
         for i, u in enumerate(UNITS):
             with cols[i]:
@@ -755,6 +802,90 @@ def page_suppliers(data):
             st.rerun()
 
 
+# ============================ 作廢申請（審核） ============================
+def page_void(data):
+    vr = data["void_requests"]
+    pos = data["purchase_orders"]
+    items = data["po_items"]
+    assets = data["assets"]
+    sups = data["suppliers"]
+
+    st.markdown("<h1>作廢申請</h1><p style='color:#5A6472;margin-top:-8px'>前台送出的作廢申請會列在這裡，由你核准或駁回；核准後才會真正作廢（資料保留、僅標記）</p>", unsafe_allow_html=True)
+
+    pending = vr[vr["status"] == "待審核"]
+    done = vr[vr["status"] != "待審核"]
+
+    st.markdown(f"<div class='sect'>待審核（{len(pending)}）</div>", unsafe_allow_html=True)
+    if pending.empty:
+        st.info("目前沒有待審核的作廢申請。")
+    for r in pending.itertuples():
+        with st.container(border=True):
+            # 明細
+            if r.target_type == "採購單":
+                po = pos[pos["id"] == r.target_id]
+                if not po.empty:
+                    po = po.iloc[0]
+                    detail = (f"供應商 {sup_name(sups, po['supplier_id'])} ・ 採購日期 {po['date']}"
+                              f" ・ 採購人員 {po.get('buyer') or '—'} ・ 合計 {nt(po_total(items, r.target_id))}"
+                              f"<br>用途：{po.get('purpose') or '—'}")
+                else:
+                    detail = "<span style='color:#B42318'>（找不到此採購單，可能已被移除）</span>"
+            else:
+                a = assets[assets["id"] == r.target_id]
+                if not a.empty:
+                    a = a.iloc[0]
+                    detail = (f"{a['name']} ・ {a['category']} ・ {a['asset_type']}"
+                              f" ・ {nt(a['value'])} ・ {a['unit']} ・ 狀態 {a['status']}")
+                else:
+                    detail = "<span style='color:#B42318'>（找不到此資產，可能已被移除）</span>"
+            st.markdown(
+                f"<div style='display:flex;justify-content:space-between;align-items:flex-start'>"
+                f"<div><b>{r.target_type}　{r.target_id}</b>"
+                f"<div style='color:{SUB};font-size:13px;margin-top:4px'>{detail}</div></div>"
+                f"<span style='color:{FAINT};font-size:12px;white-space:nowrap'>{r.requested_at}</span></div>"
+                f"<div style='margin-top:8px;background:{AMBER_SOFT};color:{AMBER};border-radius:8px;padding:6px 10px;font-size:13px'>"
+                f"📝 作廢原因：{r.reason}</div>",
+                unsafe_allow_html=True)
+            b1, b2 = st.columns(2)
+            if b1.button("✅ 核准作廢", key=f"ok_{r.req_id}", type="primary", use_container_width=True):
+                _apply_void(data, r.target_type, r.target_id)
+                _set_void_status(vr, r.req_id, "已核准")
+                flash(f"已核准作廢：{r.target_type} {r.target_id}")
+                st.rerun()
+            if b2.button("✕ 駁回", key=f"no_{r.req_id}", use_container_width=True):
+                _set_void_status(vr, r.req_id, "已駁回")
+                flash(f"已駁回作廢申請：{r.target_type} {r.target_id}")
+                st.rerun()
+
+    if not done.empty:
+        st.markdown(f"<div class='sect' style='margin-top:18px'>已處理紀錄</div>", unsafe_allow_html=True)
+        rowhtml = ""
+        for r in done.sort_values("requested_at", ascending=False).itertuples():
+            rowhtml += (f"<tr><td>{r.requested_at}</td><td>{r.target_type}</td><td style='font-weight:600'>{r.target_id}</td>"
+                        f"<td style='color:{SUB}'>{r.reason}</td><td style='text-align:center'>{pill(r.status, STATUS_STYLE if r.status in STATUS_STYLE else ASTATUS_STYLE)}</td></tr>")
+        st.markdown(f"<div class='card' style='padding:4px'><table class='t'>"
+                    f"<tr><th>時間</th><th>類型</th><th>編號</th><th>原因</th><th style='text-align:center'>結果</th></tr>{rowhtml}</table></div>",
+                    unsafe_allow_html=True)
+
+
+def _set_void_status(vr, req_id, status):
+    upd = vr.set_index("req_id")
+    upd.loc[req_id, "status"] = status
+    save("void_requests", upd.reset_index()[SCHEMAS["void_requests"]])
+
+
+def _apply_void(data, target_type, target_id):
+    if target_type == "採購單":
+        pos = data["purchase_orders"]
+        save("purchase_orders", pos.assign(status=pos["status"].where(pos["id"] != target_id, "已作廢")))
+    else:
+        assets = data["assets"]
+        upd = assets.set_index("id")
+        if target_id in upd.index:
+            upd.loc[target_id, "status"] = "已作廢"
+            save("assets", upd.reset_index()[SCHEMAS["assets"]])
+
+
 # ============================ 設定（單位管理） ============================
 def page_settings(data):
     assets = data["assets"]
@@ -820,7 +951,7 @@ def main():
                         "<div><div class='brand-title'>行政後勤</div>"
                         "<div style='font-size:12px'>採購・資產整合平台</div></div></div>", unsafe_allow_html=True)
 
-        for label, icon in [("儀表板", "📊"), ("採購", "🛒"), ("資產", "📦"), ("供應商", "👥"), ("設定", "⚙️")]:
+        for label, icon in [("儀表板", "📊"), ("採購", "🛒"), ("資產", "📦"), ("供應商", "👥"), ("作廢申請", "🗑️"), ("設定", "⚙️")]:
             active = st.session_state.page == label
             if st.button(f"{icon}\u2002{label}", key=f"nav_{label}", use_container_width=True,
                          type="primary" if active else "secondary"):
@@ -855,7 +986,7 @@ def main():
 
     {"儀表板": page_dashboard, "採購": page_procurement,
      "資產": page_assets, "供應商": page_suppliers,
-     "設定": page_settings}[st.session_state.page](data)
+     "作廢申請": page_void, "設定": page_settings}[st.session_state.page](data)
 
 
 if __name__ == "__main__":
