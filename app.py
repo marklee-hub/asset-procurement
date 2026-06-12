@@ -22,7 +22,7 @@ AMBER, AMBER_SOFT = "#B45309", "#FBEEDC"
 INDIGO, INDIGO_SOFT = "#4338CA", "#E7E7FA"
 DANGER = "#B42318"
 
-CATEGORIES = ["3C設備", "辦公家具", "音響設備", "文宣品", "其他"]
+CATEGORIES = ["3C設備", "辦公家具", "音響設備", "文宣品", "文具耗材", "其他"]
 DEFAULT_UNITS = ["傳道部", "行銷部", "影音部", "行政部", "神學院", "財務部"]
 UNITS = list(DEFAULT_UNITS)   # 啟動時會從 Google Sheet 的 units 分頁覆蓋
 LEDGER_THRESHOLD = 80000      # ≥ 此金額預設為「列帳資產」
