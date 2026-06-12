@@ -634,6 +634,8 @@ def page_assets(data):
                 if a["status"] == "已作廢":
                     st.caption("此資產已作廢。")
                     continue
+                if not is_admin():
+                    continue  # 一般使用者：只能瀏覽，不顯示任何操作
                 u, s = st.columns(2)
                 nu = u.selectbox("單位", UNITS, index=UNITS.index(a["unit"]) if a["unit"] in UNITS else 0,
                                  key=f"lu_{a['id']}", label_visibility="collapsed")
@@ -646,15 +648,15 @@ def page_assets(data):
                     save("assets", upd.reset_index()[SCHEMAS["assets"]])
                     flash(f"已更新資產 {a['id']}")
                     st.rerun()
-                if has_pending_void(data, "資產", a["id"]):
-                    st.caption("⏳ 作廢申請審核中")
-                else:
-                    with st.expander("🗑️ 申請作廢"):
-                        vr_reason = st.text_input("作廢原因", key=f"vreason_as_{a['id']}", placeholder="填錯／重複登錄…")
-                        if st.button("送出申請", key=f"vbtn_as_{a['id']}", disabled=not vr_reason.strip()):
-                            submit_void_request(data, "資產", a["id"], vr_reason)
-                            flash("已送出作廢申請，待管理者審核")
-                            st.rerun()
+                with st.expander("🗑️ 作廢這筆資產"):
+                    st.caption("作廢後資料保留、僅標記為已作廢，不會出現在統計與單位配置。")
+                    ck = st.checkbox("我確認要作廢這筆資產", key=f"vck_as_{a['id']}")
+                    if st.button("確認作廢", key=f"vbtn_as_{a['id']}", disabled=not ck):
+                        upd = assets.set_index("id")
+                        upd.loc[a["id"], "status"] = "已作廢"
+                        save("assets", upd.reset_index()[SCHEMAS["assets"]])
+                        flash(f"資產 {a['id']} 已作廢")
+                        st.rerun()
         if view.empty:
             st.info("沒有符合條件的資產")
 
@@ -694,6 +696,14 @@ def page_assets(data):
                         unsafe_allow_html=True)
 
     with tab_add:
+        if not is_admin():
+            st.info("僅管理者可手動新增資產。")
+        else:
+            _asset_manual_add(assets)
+
+
+def _asset_manual_add(assets):
+    if True:
         st.markdown(f"<div style='color:{SUB};font-size:14px;margin-bottom:6px'>登錄以前就買好、不是透過本系統採購的舊資產。來源會標記為「手動新增」。耗材不在此登錄。</div>", unsafe_allow_html=True)
         a1, a2 = st.columns(2)
         m_name = a1.text_input("品名", key="m_name", placeholder="例如：筆記型電腦")
@@ -968,10 +978,12 @@ def main():
             st.session_state.role = None
             st.rerun()
         if is_admin():
-            with st.expander("⚙️ 首次設定 / 重建資料"):
-                st.caption("第一次使用，或想用範例資料重建工作表時按此。會覆蓋現有工作表。")
-                if st.button("初始化試算表（含範例）"):
+            with st.expander("⚙️ 首次設定 / 重建資料（危險）"):
+                st.caption("⚠️ 僅限第一次建置使用。按下會「清空並覆蓋」現有所有資料，改回範例資料，無法復原。")
+                confirm = st.checkbox("我了解這會清除現有資料，仍要重建", key="init_confirm")
+                if st.button("初始化試算表（含範例）", disabled=not confirm):
                     init_sheets()
+                    st.session_state.init_confirm = False
                     flash("已建立／重建工作表與範例資料")
                     st.rerun()
 
