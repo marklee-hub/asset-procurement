@@ -61,83 +61,81 @@ def inject_css():
     html, body, [class*="css"], .stApp {{
         font-family: 'Manrope','PingFang TC','Noto Sans TC','Microsoft JhengHei',sans-serif;
     }}
-    .stApp {{ background: #F4F6F8; }}
+    .stApp {{ background: #F6F8F9; }}
     #MainMenu, footer {{ visibility: hidden; }}
     [data-testid="stHeader"] {{ background: transparent; }}
-    .block-container {{ padding-top: 2.2rem; padding-bottom: 3rem; max-width: 1120px; }}
+    .block-container {{ padding-top: 2.2rem; padding-bottom: 3rem; max-width: 1140px; }}
 
-    /* 側欄深色 */
-    section[data-testid="stSidebar"] {{ background: #15201F; }}
+    /* 側欄深色漸層 */
+    section[data-testid="stSidebar"] {{ background: linear-gradient(180deg,#16221F 0%,#0F1B19 100%); }}
     section[data-testid="stSidebar"] * {{ color: #C9D6D2; }}
     section[data-testid="stSidebar"] .brand-title {{ color:#fff; font-weight:800; font-size:1rem; }}
-    /* 側欄導覽按鈕 */
-    section[data-testid="stSidebar"] .stButton > button {{
-        text-align:left; justify-content:flex-start; border:none; background:transparent;
-        color:#C9D6D2; font-weight:600; border-radius:12px; padding:9px 14px; font-size:15px;
-    }}
-    section[data-testid="stSidebar"] .stButton > button:hover {{ background:rgba(255,255,255,.08); color:#fff; }}
-    section[data-testid="stSidebar"] .stButton > button[kind="primary"] {{ background:#0F766E; color:#fff; }}
-    section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {{ background:#0c655e; }}
 
-    /* 主按鈕 */
-    .stButton > button {{ border-radius:12px; font-weight:600; border:1px solid {LINE}; }}
-    .stButton > button[kind="primary"] {{ background:{JADE}; border-color:{JADE}; }}
-    .stButton > button[kind="primary"]:hover {{ background:#0c655e; border-color:#0c655e; }}
+    /* 主按鈕：圓角＋陰影 */
+    .stButton > button {{ border-radius:12px; font-weight:600; border:1px solid {LINE}; transition:all .15s ease; }}
+    .stButton > button:hover {{ transform:translateY(-1px); }}
+    .stButton > button[kind="primary"] {{ background:{JADE}; border-color:{JADE}; box-shadow:0 6px 16px rgba(15,118,110,.25); }}
+    .stButton > button[kind="primary"]:hover {{ background:#0c655e; border-color:#0c655e; box-shadow:0 8px 20px rgba(15,118,110,.32); }}
 
-    /* 側欄導覽：乾淨無框、左對齊、選中highlight */
+    /* 側欄導覽：乾淨無框、左對齊、選中highlight＋左側強調條 */
     section[data-testid="stSidebar"] .stButton > button {{
         border:none !important; background:transparent !important; color:#C9D6D2 !important;
         justify-content:flex-start !important; text-align:left !important;
-        font-weight:600; border-radius:12px; padding:9px 14px; box-shadow:none !important;
+        font-weight:600; border-radius:11px; padding:10px 14px; box-shadow:none !important; transform:none !important;
     }}
     section[data-testid="stSidebar"] .stButton > button p {{ text-align:left; width:100%; }}
     section[data-testid="stSidebar"] .stButton > button:hover {{
-        background:rgba(255,255,255,.08) !important; color:#fff !important;
+        background:rgba(255,255,255,.07) !important; color:#fff !important;
     }}
     section[data-testid="stSidebar"] .stButton > button[kind="primary"] {{
-        background:{JADE} !important; color:#fff !important;
-    }}
-    section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {{
-        background:#0c655e !important;
-    }}
-    /* 登出鈕：細邊框與選單區隔 */
-    section[data-testid="stSidebar"] [data-testid="stButton"]:has(#logout) button,
-    section[data-testid="stSidebar"] .stButton:last-of-type > button {{
-        color:#8A93A2 !important;
+        background:rgba(15,118,110,.22) !important; color:#fff !important;
+        box-shadow:inset 3px 0 0 {JADE} !important;
     }}
 
     /* 輸入元件圓角 */
-    [data-baseweb="select"] > div, .stTextInput input, .stNumberInput input {{
+    [data-baseweb="select"] > div, .stTextInput input, .stNumberInput input, .stTextArea textarea {{
         border-radius:12px !important;
+    }}
+    .stTextInput input:focus, .stNumberInput input:focus, .stTextArea textarea:focus {{
+        border-color:{JADE} !important; box-shadow:0 0 0 2px rgba(15,118,110,.12) !important;
     }}
 
     /* 標題 */
-    h1 {{ font-weight:800 !important; letter-spacing:-.01em; }}
-    h2, h3 {{ font-weight:700 !important; }}
+    h1 {{ font-weight:800 !important; letter-spacing:-.015em; color:{INK}; }}
+    h2, h3 {{ font-weight:700 !important; color:{INK}; }}
 
-    /* 卡片系統 */
-    .card {{ background:#fff; border:1px solid {LINE}; border-radius:18px; padding:18px; }}
+    /* 卡片系統：柔和陰影＋hover 微浮 */
+    .card {{ background:#fff; border:1px solid {LINE}; border-radius:18px; padding:18px;
+             box-shadow:0 1px 3px rgba(16,24,40,.04), 0 1px 2px rgba(16,24,40,.03); }}
     .grid4 {{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }}
     .grid2 {{ display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }}
     @media (max-width:760px){{ .grid4{{grid-template-columns:repeat(2,1fr)}} .grid2{{grid-template-columns:1fr}} }}
     .stat-label {{ color:{FAINT}; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }}
-    .stat-value {{ font-size:26px; font-weight:800; line-height:1.1; margin-top:4px; font-variant-numeric:tabular-nums; }}
-    .stat-sub {{ color:{SUB}; font-size:12px; margin-top:2px; }}
-    .pill {{ display:inline-flex; align-items:center; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:700; white-space:nowrap; }}
+    .stat-value {{ font-size:27px; font-weight:800; line-height:1.1; margin-top:5px; font-variant-numeric:tabular-nums; }}
+    .stat-sub {{ color:{SUB}; font-size:12px; margin-top:3px; }}
+    .pill {{ display:inline-flex; align-items:center; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:700; white-space:nowrap; }}
     .flow {{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }}
-    .flowcard {{ border-radius:14px; padding:12px 16px; flex:1; min-width:150px; }}
+    .flowcard {{ border-radius:14px; padding:13px 16px; flex:1; min-width:150px; }}
     .flowcard .fl {{ font-size:12px; font-weight:700; }}
-    .flowcard .fv {{ font-weight:800; color:{INK}; font-variant-numeric:tabular-nums; }}
+    .flowcard .fv {{ font-weight:800; color:{INK}; font-variant-numeric:tabular-nums; font-size:17px; }}
     .sect {{ color:{FAINT}; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; margin-bottom:10px; }}
     table.t {{ width:100%; border-collapse:collapse; font-size:14px; }}
     table.t th {{ text-align:left; color:{FAINT}; font-size:11px; text-transform:uppercase; font-weight:700; padding:10px 14px; border-bottom:1px solid {LINE}; }}
     table.t td {{ padding:11px 14px; border-bottom:1px solid {LINE_SOFT}; }}
-    .acard {{ background:#fff; border:1px solid {LINE}; border-radius:16px; padding:14px; margin-bottom:6px; }}
+    table.t tr:hover td {{ background:{JADE_SOFT}33; }}
+    .acard {{ background:#fff; border:1px solid {LINE}; border-radius:16px; padding:14px; margin-bottom:6px;
+              box-shadow:0 1px 2px rgba(16,24,40,.03); transition:box-shadow .15s ease; }}
+    .acard:hover {{ box-shadow:0 4px 14px rgba(16,24,40,.07); }}
     .acard .aid {{ color:{FAINT}; font-size:12px; font-weight:700; font-variant-numeric:tabular-nums; }}
     .acard .anm {{ font-weight:800; }}
     .acard .acat {{ color:{SUB}; font-size:12px; }}
     .acard .aval {{ font-weight:800; color:{INK}; font-variant-numeric:tabular-nums; }}
     .unit-head {{ font-weight:800; display:flex; align-items:center; justify-content:space-between; margin-bottom:2px; }}
+
+    /* 分頁籤 */
+    .stTabs [data-baseweb="tab-list"] {{ gap:4px; }}
+    .stTabs [data-baseweb="tab"] {{ font-weight:700; }}
+    .stTabs [aria-selected="true"] {{ color:{JADE} !important; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -153,45 +151,41 @@ def flash(msg):
 
 
 # ============================ 登入 ============================
-@st.cache_data(show_spinner=False)
-def logo_data_uri():
-    import base64
-    for ext, mime in [("png", "image/png"), ("jpg", "image/jpeg"), ("jpeg", "image/jpeg")]:
-        p = os.path.join(os.path.dirname(__file__), f"logo.{ext}")
-        if os.path.exists(p):
-            with open(p, "rb") as f:
-                return f"data:{mime};base64," + base64.b64encode(f.read()).decode()
-    return None
-
-
 def require_login() -> bool:
     if st.session_state.get("authed"):
         return True
-    logo = logo_data_uri()
-    brand = (f"<img src='{logo}' style='max-width:280px;max-height:96px;margin:0 auto 16px;display:block'>"
-             if logo else "<div style='font-size:34px;margin-bottom:8px'>📦</div>")
-    # 降低瀏覽器跳出「儲存密碼／高強度密碼」提示
-    st.markdown("<input style='display:none' aria-hidden='true'>"
-                "<style>input[type=password]{-webkit-text-security:disc}</style>", unsafe_allow_html=True)
+    st.markdown("<style>input[type=password]{-webkit-text-security:disc}</style>", unsafe_allow_html=True)
     _, mid, _ = st.columns([1, 1.6, 1])
     with mid:
-        st.markdown("<div style='height:7vh'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height:9vh'></div>", unsafe_allow_html=True)
         st.markdown(
-            f"<div class='card' style='text-align:center;padding:36px 32px'>"
-            f"{brand}"
-            f"<div style='font-size:22px;font-weight:800;white-space:nowrap;letter-spacing:.01em'>採購・資產整合平台</div>"
-            f"<div style='color:{SUB};font-size:14px;margin-top:8px'>請輸入共用密碼</div></div>",
+            f"<div class='card' style='text-align:center;padding:40px 32px'>"
+            f"<div style='width:54px;height:54px;border-radius:15px;background:{JADE};margin:0 auto 16px;"
+            f"display:flex;align-items:center;justify-content:center;font-size:26px'>📦</div>"
+            f"<div style='font-size:23px;font-weight:800;white-space:nowrap;letter-spacing:.01em;color:{INK}'>採購・資產整合平台</div>"
+            f"<div style='color:{SUB};font-size:14px;margin-top:8px'>請輸入密碼登入</div></div>",
             unsafe_allow_html=True)
-        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-        pw = st.text_input("密碼", type="password", label_visibility="collapsed",
-                           placeholder="請輸入共用密碼")
+        st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+        pw = st.text_input("密碼", type="password", label_visibility="collapsed", placeholder="請輸入密碼")
         if st.button("登入", type="primary", use_container_width=True):
-            if pw == st.secrets.get("app_password", ""):
+            admin_pw = st.secrets.get("admin_password", "")
+            user_pw = st.secrets.get("app_password", "")
+            if admin_pw and pw == admin_pw:
                 st.session_state.authed = True
+                st.session_state.role = "admin"
+                st.rerun()
+            elif user_pw and pw == user_pw:
+                st.session_state.authed = True
+                st.session_state.role = "user"
                 st.rerun()
             else:
                 st.error("密碼錯誤")
     return False
+
+
+def is_admin() -> bool:
+    return st.session_state.get("role") == "admin"
+
 
 
 # ============================ Google Sheets ============================
@@ -938,20 +932,20 @@ def main():
         st.session_state.page = "儀表板"
 
     with st.sidebar:
-        _logo = logo_data_uri()
-        if _logo:
-            st.markdown(
-                f"<div style='background:#fff;border-radius:12px;padding:10px;margin-bottom:12px;text-align:center'>"
-                f"<img src='{_logo}' style='max-width:100%;max-height:64px'></div>",
-                unsafe_allow_html=True)
-        else:
-            st.markdown("<div style='display:flex;align-items:center;gap:8px;padding:6px 2px 14px'>"
-                        "<div style='width:32px;height:32px;border-radius:9px;background:#0F766E;display:flex;"
-                        "align-items:center;justify-content:center;font-size:18px'>📦</div>"
-                        "<div><div class='brand-title'>行政後勤</div>"
-                        "<div style='font-size:12px'>採購・資產整合平台</div></div></div>", unsafe_allow_html=True)
+        role_label = "管理者" if is_admin() else "一般使用者"
+        role_color = JADE if is_admin() else SUB
+        st.markdown("<div style='display:flex;align-items:center;gap:9px;padding:6px 2px 4px'>"
+                    f"<div style='width:34px;height:34px;border-radius:10px;background:{JADE};display:flex;"
+                    "align-items:center;justify-content:center;font-size:18px'>📦</div>"
+                    "<div><div class='brand-title'>行政後勤</div>"
+                    "<div style='font-size:12px'>採購・資產整合平台</div></div></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size:12px;color:{role_color};font-weight:700;padding:0 2px 12px'>● {role_label}</div>",
+                    unsafe_allow_html=True)
 
-        for label, icon in [("儀表板", "📊"), ("採購", "🛒"), ("資產", "📦"), ("供應商", "👥"), ("作廢申請", "🗑️"), ("設定", "⚙️")]:
+        nav_items = [("儀表板", "📊"), ("採購", "🛒"), ("資產", "📦"), ("供應商", "👥")]
+        if is_admin():
+            nav_items += [("作廢申請", "🗑️"), ("設定", "⚙️")]
+        for label, icon in nav_items:
             active = st.session_state.page == label
             if st.button(f"{icon}\u2002{label}", key=f"nav_{label}", use_container_width=True,
                          type="primary" if active else "secondary"):
@@ -961,13 +955,15 @@ def main():
         st.divider()
         if st.button("登出", key="logout", use_container_width=True):
             st.session_state.authed = False
+            st.session_state.role = None
             st.rerun()
-        with st.expander("⚙️ 首次設定 / 重建資料"):
-            st.caption("第一次使用，或想用範例資料重建工作表時按此。會覆蓋現有四個工作表。")
-            if st.button("初始化試算表（含範例）"):
-                init_sheets()
-                flash("已建立／重建工作表與範例資料")
-                st.rerun()
+        if is_admin():
+            with st.expander("⚙️ 首次設定 / 重建資料"):
+                st.caption("第一次使用，或想用範例資料重建工作表時按此。會覆蓋現有工作表。")
+                if st.button("初始化試算表（含範例）"):
+                    init_sheets()
+                    flash("已建立／重建工作表與範例資料")
+                    st.rerun()
 
     try:
         data = load_all()
@@ -983,6 +979,11 @@ def main():
 
     if all(data[n].empty for n in SCHEMAS):
         st.info("試算表是空的。請開啟左側「⚙️ 首次設定」並按「初始化試算表」建立範例資料。")
+
+    # 權限保護：非管理者不得進入管理頁（即使手動切換）
+    admin_only = {"作廢申請", "設定"}
+    if st.session_state.page in admin_only and not is_admin():
+        st.session_state.page = "儀表板"
 
     {"儀表板": page_dashboard, "採購": page_procurement,
      "資產": page_assets, "供應商": page_suppliers,
