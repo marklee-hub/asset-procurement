@@ -374,56 +374,77 @@ def sup_name(suppliers, sid):
 # ============================ 儀表板 ============================
 def page_dashboard(data):
     pos, items, assets, sups = data["purchase_orders"], data["po_items"], data["assets"], data["suppliers"]
-    received = pos[pos["status"] == "已驗收"]["id"].tolist()
+    vr = data.get("void_requests")
     pending = pos[pos["status"] == "待驗收"]["id"].tolist()
-    spend = sum(po_total(items, p) for p in received)
     pending_amt = sum(po_total(items, p) for p in pending)
-    live = assets[~assets["status"].isin(["已報廢", "已作廢"])]
-    ledger_val = live[live["asset_type"] == "列帳資產"]["value"].sum()
-    managed_val = live[live["asset_type"] == "列管資產"]["value"].sum()
+    pending_void = int((vr["status"] == "待審核").sum()) if (vr is not None and not vr.empty) else 0
 
-    st.markdown("<h1>儀表板</h1><p style='color:#5A6472;margin-top:-8px'>採購支出與資產價值一覽</p>", unsafe_allow_html=True)
+    live = assets[~assets["status"].isin(["已報廢", "已作廢"])]
+    ledger = live[live["asset_type"] == "列帳資產"]
+    managed = live[live["asset_type"] == "列管資產"]
+    ledger_val, managed_val = ledger["value"].sum(), managed["value"].sum()
+
+    st.markdown("<h1>儀表板</h1><p style='color:#5A6472;margin-top:-8px'>資產總覽與待辦一覽</p>", unsafe_allow_html=True)
 
     def stat(label, value, accent, sub=""):
         return (f"<div class='card'><div class='stat-label'>{label}</div>"
                 f"<div class='stat-value' style='color:{accent}'>{value}</div>"
                 f"<div class='stat-sub'>{sub}</div></div>")
 
+    # 第一排：資產總覽（筆數＋總值）
     st.markdown(
         "<div class='grid4'>"
-        + stat("本年採購支出", nt(spend), AMBER, "已驗收採購單")
-        + stat("列帳資產總值", nt(ledger_val), INDIGO, "≥ 8 萬列帳")
-        + stat("列管資產總值", nt(managed_val), JADE, "排除已報廢")
-        + stat("待驗收金額", nt(pending_amt), f"{len(pending)} 張單 ・ {len(sups)} 家供應商")
+        + stat("列帳資產", nt(ledger_val), INDIGO, f"{len(ledger)} 筆 ・ B26 ・ ≥ 8 萬")
+        + stat("列管資產", nt(managed_val), JADE, f"{len(managed)} 筆 ・ A26")
+        + stat("資產總值", nt(ledger_val + managed_val), INK, f"{len(live)} 筆有效資產")
+        + stat("資產總數", f"{len(live)}", SUB, "排除已報廢／已作廢")
         + "</div>", unsafe_allow_html=True)
 
-    # 轉換流向
-    def fc(bg, color, label, value):
-        return (f"<div class='flowcard' style='background:{bg}'>"
-                f"<div class='fl' style='color:{color}'>{label}</div>"
-                f"<div class='fv'>{value}</div></div>")
-    arrow = "<div style='color:#8A93A2;font-size:20px'>→</div>"
-    st.markdown(
-        "<div class='card' style='margin-top:14px'><div class='sect'>採購到資產的轉換</div><div class='flow'>"
-        + fc(AMBER_SOFT, AMBER, "採購支出", nt(spend)) + arrow
-        + fc(LINE_SOFT, SUB, "驗收分類", f"{len(received)} 張單") + arrow
-        + fc(INDIGO_SOFT, INDIGO, "列帳資產", nt(ledger_val))
-        + fc(JADE_SOFT, JADE, "列管資產", nt(managed_val))
-        + "</div></div>", unsafe_allow_html=True)
+    # 第二排：待辦事項（待驗收、待審作廢）＋ 資產狀態
+    using = int((live["status"] == "使用中").sum())
+    repair = int((assets["status"] == "維修中").sum())
+    scrap = int((assets["status"] == "已報廢").sum())
 
+    def todo(label, n, accent, sub):
+        badge = f"<span style='background:{accent};color:#fff;border-radius:999px;padding:1px 9px;font-size:13px;font-weight:800'>{n}</span>" if n else f"<span style='color:{FAINT};font-weight:800'>0</span>"
+        return (f"<div class='card' style='display:flex;justify-content:space-between;align-items:center'>"
+                f"<div><div style='font-weight:700'>{label}</div><div class='stat-sub'>{sub}</div></div>{badge}</div>")
+
+    st.markdown("<div style='height:14px'></div><div class='sect'>待辦事項</div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='grid2'>"
+        + todo("待驗收採購單", len(pending), AMBER, f"金額合計 {nt(pending_amt)}")
+        + todo("待審核作廢申請", pending_void, DANGER, "前台送出、等你核准")
+        + "</div>", unsafe_allow_html=True)
+
+    st.markdown("<div style='height:14px'></div><div class='sect'>資產狀態</div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='grid4'>"
+        + stat("使用中", f"{using}", JADE, "有效資產")
+        + stat("維修中", f"{repair}", AMBER, "需追蹤")
+        + stat("已報廢", f"{scrap}", DANGER, "")
+        + stat("供應商", f"{len(sups)}", SUB, "合作廠商數")
+        + "</div>", unsafe_allow_html=True)
+
+    # 第三排：各單位資產值長條圖 ＋ 待驗收清單
     left, right = st.columns([3, 2])
     with left:
         with st.container(border=True):
-            st.markdown("<div class='sect'>各類別：採購支出 vs 資產價值</div>", unsafe_allow_html=True)
+            st.markdown("<div class='sect'>各單位資產值（列帳＋列管）</div>", unsafe_allow_html=True)
             rows = []
-            for cat in CATEGORIES:
-                sp = sum((items[(items["po_id"] == p) & (items["category"] == cat)]["qty"]
-                          * items[(items["po_id"] == p) & (items["category"] == cat)]["price"]).sum() for p in received)
-                rows.append({"類別": cat, "採購支出": sp, "資產價值": live[live["category"] == cat]["value"].sum()})
-            st.bar_chart(pd.DataFrame(rows).set_index("類別"), color=[AMBER, JADE], height=240)
+            for u in UNITS:
+                sub = live[live["unit"] == u]
+                rows.append({"單位": u,
+                             "列帳資產": sub[sub["asset_type"] == "列帳資產"]["value"].sum(),
+                             "列管資產": sub[sub["asset_type"] == "列管資產"]["value"].sum()})
+            df = pd.DataFrame(rows).set_index("單位")
+            if df.values.sum() == 0:
+                st.caption("尚無資產資料")
+            else:
+                st.bar_chart(df, color=[INDIGO, JADE], height=260)
     with right:
         with st.container(border=True):
-            st.markdown("<div class='sect'>待驗收</div>", unsafe_allow_html=True)
+            st.markdown("<div class='sect'>待驗收採購單</div>", unsafe_allow_html=True)
             if not pending:
                 st.caption("沒有待驗收的採購單")
             for p in pending:
