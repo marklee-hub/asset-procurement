@@ -462,7 +462,7 @@ def page_dashboard(data):
 def page_procurement(data):
     pos, items, assets, sups = data["purchase_orders"], data["po_items"], data["assets"], data["suppliers"]
     st.markdown("<h1>採購</h1><p style='color:#5A6472;margin-top:-8px'>採購單管理；驗收時分類為列管／列帳資產或一般耗材</p>", unsafe_allow_html=True)
-    tab_list, tab_new = st.tabs(["採購單清單", "＋ 新增採購單"])
+    tab_list, tab_query, tab_new = st.tabs(["採購單清單", "🔍 品項查詢", "＋ 新增採購單"])
 
     with tab_list:
         q = st.text_input("搜尋", placeholder="輸入單號、採購人員、供應商名稱或統一編號查詢…", label_visibility="collapsed")
@@ -535,6 +535,56 @@ def page_procurement(data):
                             submit_void_request(data, "採購單", sel, vr_reason)
                             flash("已送出作廢申請，待管理者審核")
                             st.rerun()
+
+    with tab_query:
+        st.markdown(f"<div style='color:{SUB};font-size:14px;margin-bottom:8px'>輸入品項關鍵字，查詢歷次採購紀錄（例如打「影印」會找出影印紙、影印機…）。</div>", unsafe_allow_html=True)
+        iq = st.text_input("品項關鍵字", placeholder="例如：影印紙、麥克風、電腦…", label_visibility="collapsed")
+        if not iq.strip():
+            st.caption("請輸入關鍵字開始查詢。")
+        else:
+            kw = iq.strip()
+            hit = items[items["name"].astype(str).str.contains(kw, case=False, na=False)].copy()
+            if hit.empty:
+                st.info(f"找不到品名包含「{kw}」的採購紀錄。")
+            else:
+                # 併入採購單的日期／供應商
+                pinfo = pos.set_index("id")
+                hit["日期"] = hit["po_id"].map(lambda x: pinfo["date"].get(x, ""))
+                hit["供應商"] = hit["po_id"].map(lambda x: sup_name(sups, pinfo["supplier_id"].get(x, "")))
+                hit["狀態"] = hit["po_id"].map(lambda x: pinfo["status"].get(x, ""))
+                hit["小計"] = hit["qty"] * hit["price"]
+                hit = hit.sort_values("日期", ascending=False)
+
+                # 總計摘要
+                times = len(hit)
+                total_qty = int(hit["qty"].sum())
+                total_amt = int(hit["小計"].sum())
+                avg_price = (total_amt / total_qty) if total_qty else 0
+
+                def stat(label, value, accent, sub=""):
+                    return (f"<div class='card'><div class='stat-label'>{label}</div>"
+                            f"<div class='stat-value' style='color:{accent}'>{value}</div>"
+                            f"<div class='stat-sub'>{sub}</div></div>")
+                st.markdown(
+                    "<div class='grid4'>"
+                    + stat("採購次數", f"{times}", INDIGO, "符合的明細筆數")
+                    + stat("累計數量", f"{total_qty}", JADE, "歷次加總")
+                    + stat("累計金額", nt(total_amt), AMBER, "歷次小計加總")
+                    + stat("平均單價", nt(round(avg_price)), INK, "總金額 ÷ 總量")
+                    + "</div><div style='height:12px'></div>", unsafe_allow_html=True)
+
+                # 明細表
+                head = ("<tr><th>採購日期</th><th>品名</th><th>供應商</th><th style='text-align:right'>數量</th>"
+                        "<th style='text-align:right'>單價</th><th style='text-align:right'>小計</th><th>單號</th></tr>")
+                body = ""
+                for r in hit.itertuples():
+                    body += (f"<tr><td style='font-variant-numeric:tabular-nums'>{r.日期}</td>"
+                             f"<td style='font-weight:600'>{r.name}</td><td style='color:{SUB}'>{r.供應商}</td>"
+                             f"<td style='text-align:right;font-variant-numeric:tabular-nums'>{int(r.qty)}</td>"
+                             f"<td style='text-align:right;font-variant-numeric:tabular-nums'>{nt(r.price)}</td>"
+                             f"<td style='text-align:right;font-weight:700;font-variant-numeric:tabular-nums'>{nt(r.小計)}</td>"
+                             f"<td style='color:{SUB}'>{r.po_id}</td></tr>")
+                st.markdown(f"<div class='card' style='padding:4px'><table class='t'>{head}{body}</table></div>", unsafe_allow_html=True)
 
     with tab_new:
         sup_map = {sup_name(sups, r.id): r.id for r in sups.itertuples()}
