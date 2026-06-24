@@ -408,40 +408,41 @@ def page_dashboard(data):
         + stat("資產總數", f"{len(live)}", SUB, "排除已報廢／已作廢")
         + "</div>", unsafe_allow_html=True)
 
-    # 本年度採購金額（預算分佈）
-    st.markdown(f"<div style='height:14px'></div><div class='sect'>{yr} 年度採購金額（已驗收＋待驗收）</div>", unsafe_allow_html=True)
-    bl, br = st.columns([2, 3])
-    with bl:
-        st.markdown(
-            f"<div class='card' style='background:linear-gradient(135deg,{JADE} 0%,#0c655e 100%);border:none'>"
-            f"<div style='color:#CFE8E4;font-size:12px;font-weight:700;letter-spacing:.04em'>本年度採購總額</div>"
-            f"<div style='color:#fff;font-size:32px;font-weight:800;margin-top:6px;font-variant-numeric:tabular-nums'>{nt(year_spend)}</div>"
-            f"<div style='color:#CFE8E4;font-size:12px;margin-top:4px'>{len(year_ids)} 張採購單 ・ 含已下單未驗收</div></div>",
-            unsafe_allow_html=True)
-    with br:
-        with st.container(border=True):
-            st.markdown("<div class='sect'>各類別花費（看預算分佈）</div>", unsafe_allow_html=True)
-            if year_items.empty:
-                st.caption(f"{yr} 年度尚無採購紀錄")
-            else:
-                cat_spend = []
-                for cat in CATEGORIES:
-                    sub = year_items[year_items["category"] == cat]
-                    amt = int((sub["qty"] * sub["price"]).sum())
-                    if amt > 0:
-                        cat_spend.append((cat, amt))
-                cat_spend.sort(key=lambda x: x[1], reverse=True)
-                total = sum(a for _, a in cat_spend) or 1
-                bars = ""
-                for cat, amt in cat_spend:
-                    pct = amt / total * 100
-                    bars += (f"<div style='margin-bottom:10px'>"
-                             f"<div style='display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px'>"
-                             f"<span style='font-weight:600'>{cat}</span>"
-                             f"<span style='color:{SUB};font-variant-numeric:tabular-nums'>{nt(amt)}　({pct:.0f}%)</span></div>"
-                             f"<div style='background:{LINE_SOFT};border-radius:6px;height:8px;overflow:hidden'>"
-                             f"<div style='background:{JADE};width:{pct:.1f}%;height:100%'></div></div></div>")
-                st.markdown(bars, unsafe_allow_html=True)
+    # 本年度採購金額（預算分佈）— 僅管理者可見
+    if is_admin():
+        st.markdown(f"<div style='height:14px'></div><div class='sect'>{yr} 年度採購金額（已驗收＋待驗收）</div>", unsafe_allow_html=True)
+        bl, br = st.columns([2, 3])
+        with bl:
+            st.markdown(
+                f"<div class='card' style='background:linear-gradient(135deg,{JADE} 0%,#0c655e 100%);border:none'>"
+                f"<div style='color:#CFE8E4;font-size:12px;font-weight:700;letter-spacing:.04em'>本年度採購總額</div>"
+                f"<div style='color:#fff;font-size:32px;font-weight:800;margin-top:6px;font-variant-numeric:tabular-nums'>{nt(year_spend)}</div>"
+                f"<div style='color:#CFE8E4;font-size:12px;margin-top:4px'>{len(year_ids)} 張採購單 ・ 含已下單未驗收</div></div>",
+                unsafe_allow_html=True)
+        with br:
+            with st.container(border=True):
+                st.markdown("<div class='sect'>各類別花費（看預算分佈）</div>", unsafe_allow_html=True)
+                if year_items.empty:
+                    st.caption(f"{yr} 年度尚無採購紀錄")
+                else:
+                    cat_spend = []
+                    for cat in CATEGORIES:
+                        sub = year_items[year_items["category"] == cat]
+                        amt = int((sub["qty"] * sub["price"]).sum())
+                        if amt > 0:
+                            cat_spend.append((cat, amt))
+                    cat_spend.sort(key=lambda x: x[1], reverse=True)
+                    total = sum(a for _, a in cat_spend) or 1
+                    bars = ""
+                    for cat, amt in cat_spend:
+                        pct = amt / total * 100
+                        bars += (f"<div style='margin-bottom:10px'>"
+                                 f"<div style='display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px'>"
+                                 f"<span style='font-weight:600'>{cat}</span>"
+                                 f"<span style='color:{SUB};font-variant-numeric:tabular-nums'>{nt(amt)}　({pct:.0f}%)</span></div>"
+                                 f"<div style='background:{LINE_SOFT};border-radius:6px;height:8px;overflow:hidden'>"
+                                 f"<div style='background:{JADE};width:{pct:.1f}%;height:100%'></div></div></div>")
+                    st.markdown(bars, unsafe_allow_html=True)
 
     # 第二排：待辦事項（待驗收、待審作廢）＋ 資產狀態
     using = int((live["status"] == "使用中").sum())
@@ -454,11 +455,16 @@ def page_dashboard(data):
                 f"<div><div style='font-weight:700'>{label}</div><div class='stat-sub'>{sub}</div></div>{badge}</div>")
 
     st.markdown("<div style='height:14px'></div><div class='sect'>待辦事項</div>", unsafe_allow_html=True)
-    st.markdown(
-        "<div class='grid2'>"
-        + todo("待驗收採購單", len(pending), AMBER, f"金額合計 {nt(pending_amt)}")
-        + todo("待審核作廢申請", pending_void, DANGER, "前台送出、等你核准")
-        + "</div>", unsafe_allow_html=True)
+    if is_admin():
+        st.markdown(
+            "<div class='grid2'>"
+            + todo("待驗收採購單", len(pending), AMBER, f"金額合計 {nt(pending_amt)}")
+            + todo("待審核作廢申請", pending_void, DANGER, "前台送出、等你核准")
+            + "</div>", unsafe_allow_html=True)
+    else:
+        st.markdown("<div class='grid2'>"
+                    + todo("待驗收採購單", len(pending), AMBER, f"金額合計 {nt(pending_amt)}")
+                    + "</div>", unsafe_allow_html=True)
 
     st.markdown("<div style='height:14px'></div><div class='sect'>資產狀態</div>", unsafe_allow_html=True)
     st.markdown(
