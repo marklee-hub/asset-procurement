@@ -566,17 +566,45 @@ def page_procurement(data):
                        | pos["buyer"].astype(str).str.contains(kw, case=False, na=False)
                        | sname.str.contains(kw, case=False, na=False)
                        | stax.str.contains(kw, case=False, na=False)]
-        st.caption(f"{len(rows)} 張採購單　·　點任一張即可展開明細")
+        rows = rows.sort_values("date", ascending=False)
+        st.caption(f"{len(rows)} 張採購單　·　點下方單號按鈕看明細")
 
-        if rows.empty:
-            st.info("找不到符合的採購單")
-        # 新到舊排序
-        for r in rows.sort_values("date", ascending=False).itertuples():
+        # 一覽表格（狀態用顏色標）
+        head = ("<tr><th>單號</th><th>供應商</th><th>採購人員</th><th>採購日期</th>"
+                "<th style='text-align:right'>金額</th><th style='text-align:center'>狀態</th></tr>")
+        body = ""
+        ROW_TINT = {"已驗收": JADE_SOFT + "55", "待驗收": AMBER_SOFT + "66",
+                    "草稿": "transparent", "已作廢": "#F3EDED"}
+        for r in rows.itertuples():
             buyer = getattr(r, "buyer", "") or "—"
-            sname1 = sup_name(sups, r.supplier_id)
-            label = f"{r.id}　·　{sname1}　·　{buyer}　·　{r.date}　·　{nt(po_total(items, r.id))}　·　{r.status}"
-            with st.expander(label):
-                _po_detail(data, r.id, pos, items, assets, sups)
+            tint = ROW_TINT.get(r.status, "transparent")
+            body += (f"<tr style='background:{tint}'><td style='font-weight:700'>{r.id}</td><td style='color:{SUB}'>{sup_name(sups, r.supplier_id)}</td>"
+                     f"<td style='color:{SUB}'>{buyer}</td><td style='color:{SUB};font-variant-numeric:tabular-nums'>{r.date}</td>"
+                     f"<td style='text-align:right;font-weight:800;font-variant-numeric:tabular-nums'>{nt(po_total(items, r.id))}</td>"
+                     f"<td style='text-align:center'>{pill(r.status, STATUS_STYLE)}</td></tr>")
+        if not body:
+            body = f"<tr><td colspan='6' style='text-align:center;color:{FAINT};padding:18px'>找不到符合的採購單</td></tr>"
+        st.markdown(f"<div class='card' style='padding:4px'><table class='t'>{head}{body}</table></div>", unsafe_allow_html=True)
+
+        # 點單號按鈕看明細
+        if not rows.empty:
+            st.markdown("<div style='height:10px'></div><div class='sect'>點單號看明細</div>", unsafe_allow_html=True)
+            id_list = rows["id"].tolist()
+            cur = st.session_state.get("po_sel")
+            if cur not in id_list:
+                cur = None
+            cols = st.columns(4)
+            for i, pid in enumerate(id_list):
+                if cols[i % 4].button(pid, key=f"posel_{pid}", use_container_width=True,
+                                      type="primary" if pid == cur else "secondary"):
+                    st.session_state.po_sel = None if pid == cur else pid
+                    st.rerun()
+            sel = st.session_state.get("po_sel")
+            if sel in id_list:
+                sp = pos[pos["id"] == sel].iloc[0]
+                with st.container(border=True):
+                    st.markdown(f"<h3 style='margin:0 0 .2rem'>{sel} &nbsp; {pill(sp['status'], STATUS_STYLE)}</h3>", unsafe_allow_html=True)
+                    _po_detail(data, sel, pos, items, assets, sups)
 
     with tab_query:
         st.markdown(f"<div style='color:{SUB};font-size:14px;margin-bottom:8px'>輸入關鍵字，查詢歷次採購紀錄。會比對「品名」與「採購用途」（例如打「影印」找出影印紙；打「主日書房」找出用途含主日書房的採購）。</div>", unsafe_allow_html=True)
