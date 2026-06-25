@@ -137,25 +137,27 @@ def inject_css():
     .stTabs [data-baseweb="tab"] {{ font-weight:700; }}
     .stTabs [aria-selected="true"] {{ color:{JADE} !important; }}
 
-    /* 採購單：整合式可點列（扁平、無外框、相連） */
+    /* 採購單：欄位對齊的可點列（扁平、相連） */
     div[data-testid="stVerticalBlock"]:has(#po-rows) .stButton > button {{
         border:none !important; border-radius:0 !important;
-        border-bottom:1px solid {LINE_SOFT} !important;
-        background:#fff !important; box-shadow:none !important; transform:none !important;
+        background:transparent !important; box-shadow:none !important; transform:none !important;
         text-align:left !important; justify-content:flex-start !important;
-        padding:13px 16px !important; font-weight:600 !important; color:{INK} !important;
+        padding:6px 4px !important; font-weight:700 !important; color:{INK} !important;
         font-variant-numeric:tabular-nums;
     }}
-    div[data-testid="stVerticalBlock"]:has(#po-rows) .stButton > button p {{ text-align:left; width:100%; }}
     div[data-testid="stVerticalBlock"]:has(#po-rows) .stButton > button:hover {{
-        background:{JADE_SOFT}55 !important; color:{INK} !important;
+        background:{JADE_SOFT}66 !important; color:{JADE} !important;
     }}
     div[data-testid="stVerticalBlock"]:has(#po-rows) .stButton > button[kind="primary"] {{
-        background:{JADE_SOFT} !important; color:{INK} !important;
+        background:transparent !important; color:{JADE} !important;
         box-shadow:inset 3px 0 0 {JADE} !important;
     }}
-    #po-head {{ display:flex; padding:10px 16px; color:{FAINT}; font-size:11px; font-weight:700;
-        text-transform:uppercase; letter-spacing:.04em; border-bottom:1px solid {LINE}; }}
+    /* 列分隔線 */
+    div[data-testid="stVerticalBlock"]:has(#po-rows) div[data-testid="stHorizontalBlock"] {{
+        border-bottom:1px solid {LINE_SOFT}; align-items:center; padding:2px 0;
+    }}
+    .po-th {{ color:{FAINT}; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:8px 4px; }}
+    .po-td {{ color:{SUB}; font-size:14px; padding:6px 4px; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -590,26 +592,34 @@ def page_procurement(data):
         st.caption(f"{len(rows)} 張採購單　·　點任一列展開明細")
 
         DOT = {"已驗收": "🟢", "待驗收": "🟠", "草稿": "⚪", "已作廢": "🔴"}
+        WIDTHS = [1.3, 2, 1, 1.2, 1.2, 1.1]
         cur = st.session_state.get("po_sel")
         if rows.empty:
             st.info("找不到符合的採購單")
         else:
             with st.container():
-                st.markdown("<span id='po-rows'></span>"
-                            "<div id='po-head'><div style='flex:1.3'>單號</div><div style='flex:2'>供應商</div>"
-                            "<div style='flex:1'>採購人員</div><div style='flex:1.2'>採購日期</div>"
-                            "<div style='flex:1.2'>金額</div><div style='flex:1'>狀態</div></div>",
-                            unsafe_allow_html=True)
+                st.markdown("<span id='po-rows'></span>", unsafe_allow_html=True)
+                # 標題列
+                h = st.columns(WIDTHS)
+                for col, t, al in zip(h, ["單號", "供應商", "採購人員", "採購日期", "金額", "狀態"],
+                                      ["left", "left", "left", "left", "right", "left"]):
+                    col.markdown(f"<div class='po-th' style='text-align:{al}'>{t}</div>", unsafe_allow_html=True)
+                # 資料列
                 for r in rows.itertuples():
                     buyer = getattr(r, "buyer", "") or "—"
                     dot = DOT.get(r.status, "⚪")
-                    label = (f"{r.id}　　{sup_name(sups, r.supplier_id)}　　{buyer}　　"
-                             f"{r.date}　　{nt(po_total(items, r.id))}　　{dot} {r.status}")
-                    if st.button(label, key=f"porow_{r.id}", use_container_width=True,
-                                 type="primary" if r.id == cur else "secondary"):
-                        st.session_state.po_sel = None if r.id == cur else r.id
+                    c = st.columns(WIDTHS)
+                    sel_now = (r.id == cur)
+                    if c[0].button(("▾ " if sel_now else "▸ ") + str(r.id), key=f"porow_{r.id}", use_container_width=True,
+                                   type="primary" if sel_now else "secondary"):
+                        st.session_state.po_sel = None if sel_now else r.id
                         st.rerun()
-                    if st.session_state.get("po_sel") == r.id:
+                    c[1].markdown(f"<div class='po-td'>{sup_name(sups, r.supplier_id)}</div>", unsafe_allow_html=True)
+                    c[2].markdown(f"<div class='po-td'>{buyer}</div>", unsafe_allow_html=True)
+                    c[3].markdown(f"<div class='po-td' style='font-variant-numeric:tabular-nums'>{r.date}</div>", unsafe_allow_html=True)
+                    c[4].markdown(f"<div class='po-td' style='text-align:right;font-weight:800;font-variant-numeric:tabular-nums'>{nt(po_total(items, r.id))}</div>", unsafe_allow_html=True)
+                    c[5].markdown(f"<div class='po-td'>{dot} {r.status}</div>", unsafe_allow_html=True)
+                    if sel_now:
                         with st.container(border=True):
                             _po_detail(data, r.id, pos, items, assets, sups)
 
