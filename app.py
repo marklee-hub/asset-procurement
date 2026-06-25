@@ -586,20 +586,26 @@ def page_procurement(data):
                             st.rerun()
 
     with tab_query:
-        st.markdown(f"<div style='color:{SUB};font-size:14px;margin-bottom:8px'>輸入品項關鍵字，查詢歷次採購紀錄（例如打「影印」會找出影印紙、影印機…）。</div>", unsafe_allow_html=True)
-        iq = st.text_input("品項關鍵字", placeholder="例如：影印紙、麥克風、電腦…", label_visibility="collapsed")
+        st.markdown(f"<div style='color:{SUB};font-size:14px;margin-bottom:8px'>輸入關鍵字，查詢歷次採購紀錄。會比對「品名」與「採購用途」（例如打「影印」找出影印紙；打「主日書房」找出用途含主日書房的採購）。</div>", unsafe_allow_html=True)
+        iq = st.text_input("品項關鍵字", placeholder="例如：影印紙、麥克風、主日書房…", label_visibility="collapsed")
         if not iq.strip():
             st.caption("請輸入關鍵字開始查詢。")
         else:
             kw = iq.strip()
-            hit = items[items["name"].astype(str).str.contains(kw, case=False, na=False)].copy()
+            pinfo = pos.set_index("id")
+            # 比對品名，或所屬採購單的採購用途
+            purpose_map = pinfo["purpose"] if "purpose" in pinfo.columns else pd.Series(dtype=str)
+            item_purpose = items["po_id"].map(lambda x: str(purpose_map.get(x, "")) if len(purpose_map) else "")
+            name_hit = items["name"].astype(str).str.contains(kw, case=False, na=False)
+            purpose_hit = item_purpose.str.contains(kw, case=False, na=False)
+            hit = items[name_hit | purpose_hit].copy()
             if hit.empty:
-                st.info(f"找不到品名包含「{kw}」的採購紀錄。")
+                st.info(f"找不到品名或採購用途包含「{kw}」的採購紀錄。")
             else:
-                # 併入採購單的日期／供應商
-                pinfo = pos.set_index("id")
+                # 併入採購單的日期／供應商／用途
                 hit["日期"] = hit["po_id"].map(lambda x: pinfo["date"].get(x, ""))
                 hit["供應商"] = hit["po_id"].map(lambda x: sup_name(sups, pinfo["supplier_id"].get(x, "")))
+                hit["用途"] = hit["po_id"].map(lambda x: str(purpose_map.get(x, "")) if len(purpose_map) else "")
                 hit["狀態"] = hit["po_id"].map(lambda x: pinfo["status"].get(x, ""))
                 hit["小計"] = hit["qty"] * hit["price"]
                 hit = hit.sort_values("日期", ascending=False)
@@ -623,12 +629,13 @@ def page_procurement(data):
                     + "</div><div style='height:12px'></div>", unsafe_allow_html=True)
 
                 # 明細表
-                head = ("<tr><th>採購日期</th><th>品名</th><th>供應商</th><th style='text-align:right'>數量</th>"
+                head = ("<tr><th>採購日期</th><th>品名</th><th>採購用途</th><th>供應商</th><th style='text-align:right'>數量</th>"
                         "<th style='text-align:right'>單價</th><th style='text-align:right'>小計</th><th>單號</th></tr>")
                 body = ""
                 for r in hit.itertuples():
                     body += (f"<tr><td style='font-variant-numeric:tabular-nums'>{r.日期}</td>"
-                             f"<td style='font-weight:600'>{r.name}</td><td style='color:{SUB}'>{r.供應商}</td>"
+                             f"<td style='font-weight:600'>{r.name}</td><td style='color:{SUB}'>{r.用途 or '—'}</td>"
+                             f"<td style='color:{SUB}'>{r.供應商}</td>"
                              f"<td style='text-align:right;font-variant-numeric:tabular-nums'>{int(r.qty)}</td>"
                              f"<td style='text-align:right;font-variant-numeric:tabular-nums'>{nt(r.price)}</td>"
                              f"<td style='text-align:right;font-weight:700;font-variant-numeric:tabular-nums'>{nt(r.小計)}</td>"
