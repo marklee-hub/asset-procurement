@@ -508,6 +508,45 @@ def page_dashboard(data):
 
 
 # ============================ 採購 ============================
+def _po_detail(data, sel, pos, items, assets, sups):
+    po = pos[pos["id"] == sel].iloc[0]
+    its = items[items["po_id"] == sel].copy()
+    meta = f"{sup_name(sups, po['supplier_id'])} ・ 採購日期 {po['date']}"
+    if po.get("buyer"):
+        meta += f" ・ 採購人員 {po['buyer']}"
+    purpose_html = f"<div style='margin:.2rem 0'><b>採購用途：</b>{po.get('purpose') or '—'}</div>"
+    note_html = f"<div style='color:{SUB}'><b>備註：</b>{po.get('note')}</div>" if po.get("note") else ""
+    st.markdown(f"<p style='color:{SUB};margin:.1rem 0 .3rem'>{meta}</p>{purpose_html}{note_html}",
+                unsafe_allow_html=True)
+    rowhtml = ""
+    for it in its.itertuples():
+        rowhtml += (f"<tr><td style='font-weight:600'>{it.name}</td><td style='color:{SUB}'>{it.category}</td>"
+                    f"<td style='text-align:right;font-variant-numeric:tabular-nums'>{int(it.qty)}</td>"
+                    f"<td style='text-align:right;font-variant-numeric:tabular-nums'>{nt(it.price)}</td>"
+                    f"<td style='text-align:right;font-weight:700;font-variant-numeric:tabular-nums'>{nt(it.qty * it.price)}</td></tr>")
+    st.markdown(
+        "<table class='t'><tr><th>品項</th><th>類別</th><th style='text-align:right'>數量</th>"
+        f"<th style='text-align:right'>單價</th><th style='text-align:right'>小計</th></tr>{rowhtml}</table>"
+        f"<div style='text-align:right;margin-top:10px;font-size:18px;font-weight:800;color:{AMBER}'>合計 {nt(po_total(items, sel))}</div>",
+        unsafe_allow_html=True)
+    if po["status"] == "待驗收":
+        _receive_form(sel, its, pos, assets)
+
+    st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+    if po["status"] == "已作廢":
+        st.caption("此採購單已作廢。")
+    elif has_pending_void(data, "採購單", sel):
+        st.info("⏳ 此採購單已有待審核的作廢申請，請等待管理者處理。")
+    else:
+        with st.expander("🗑️ 申請作廢這張採購單"):
+            st.caption("送出後不會立即作廢，需由管理者在「作廢申請」頁審核。")
+            vr_reason = st.text_area("作廢原因", key=f"vreason_po_{sel}", placeholder="例如：供應商或金額填錯、重複建立…")
+            if st.button("送出作廢申請", key=f"vbtn_po_{sel}", disabled=not vr_reason.strip()):
+                submit_void_request(data, "採購單", sel, vr_reason)
+                flash("已送出作廢申請，待管理者審核")
+                st.rerun()
+
+
 def page_procurement(data):
     pos, items, assets, sups = data["purchase_orders"], data["po_items"], data["assets"], data["suppliers"]
     st.markdown("<h1>採購</h1><p style='color:#5A6472;margin-top:-8px'>採購單管理；驗收時分類為列管／列帳資產或一般耗材</p>", unsafe_allow_html=True)
@@ -527,63 +566,17 @@ def page_procurement(data):
                        | pos["buyer"].astype(str).str.contains(kw, case=False, na=False)
                        | sname.str.contains(kw, case=False, na=False)
                        | stax.str.contains(kw, case=False, na=False)]
-        st.caption(f"{len(rows)} 張採購單")
-        head = ("<tr><th>單號</th><th>供應商</th><th>採購人員</th><th>採購日期</th>"
-                "<th style='text-align:right'>金額</th><th style='text-align:center'>狀態</th></tr>")
-        body = ""
-        for r in rows.itertuples():
+        st.caption(f"{len(rows)} 張採購單　·　點任一張即可展開明細")
+
+        if rows.empty:
+            st.info("找不到符合的採購單")
+        # 新到舊排序
+        for r in rows.sort_values("date", ascending=False).itertuples():
             buyer = getattr(r, "buyer", "") or "—"
-            body += (f"<tr><td style='font-weight:700'>{r.id}</td><td style='color:{SUB}'>{sup_name(sups, r.supplier_id)}</td>"
-                     f"<td style='color:{SUB}'>{buyer}</td>"
-                     f"<td style='color:{SUB}'>{r.date}</td>"
-                     f"<td style='text-align:right;font-weight:800;font-variant-numeric:tabular-nums'>{nt(po_total(items, r.id))}</td>"
-                     f"<td style='text-align:center'>{pill(r.status, STATUS_STYLE)}</td></tr>")
-        if not body:
-            body = f"<tr><td colspan='6' style='text-align:center;color:{FAINT};padding:18px'>找不到符合的採購單</td></tr>"
-        st.markdown(f"<div class='card' style='padding:4px'><table class='t'>{head}{body}</table></div>", unsafe_allow_html=True)
-
-        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-        if len(pos):
-            sel = st.selectbox("查看採購單明細", pos["id"].tolist())
-            po = pos[pos["id"] == sel].iloc[0]
-            its = items[items["po_id"] == sel].copy()
-            with st.container(border=True):
-                meta = f"{sup_name(sups, po['supplier_id'])} ・ 採購日期 {po['date']}"
-                if po.get("buyer"):
-                    meta += f" ・ 採購人員 {po['buyer']}"
-                purpose_html = f"<div style='margin:.2rem 0'><b>採購用途：</b>{po.get('purpose') or '—'}</div>"
-                note_html = f"<div style='color:{SUB}'><b>備註：</b>{po.get('note')}</div>" if po.get("note") else ""
-                st.markdown(f"<h3 style='margin:0'>{sel} &nbsp; {pill(po['status'], STATUS_STYLE)}</h3>"
-                            f"<p style='color:{SUB};margin:.2rem 0 .3rem'>{meta}</p>"
-                            f"{purpose_html}{note_html}",
-                            unsafe_allow_html=True)
-                rowhtml = ""
-                for it in its.itertuples():
-                    rowhtml += (f"<tr><td style='font-weight:600'>{it.name}</td><td style='color:{SUB}'>{it.category}</td>"
-                                f"<td style='text-align:right;font-variant-numeric:tabular-nums'>{int(it.qty)}</td>"
-                                f"<td style='text-align:right;font-variant-numeric:tabular-nums'>{nt(it.price)}</td>"
-                                f"<td style='text-align:right;font-weight:700;font-variant-numeric:tabular-nums'>{nt(it.qty * it.price)}</td></tr>")
-                st.markdown(
-                    "<table class='t'><tr><th>品項</th><th>類別</th><th style='text-align:right'>數量</th>"
-                    f"<th style='text-align:right'>單價</th><th style='text-align:right'>小計</th></tr>{rowhtml}</table>"
-                    f"<div style='text-align:right;margin-top:10px;font-size:18px;font-weight:800;color:{AMBER}'>合計 {nt(po_total(items, sel))}</div>",
-                    unsafe_allow_html=True)
-                if po["status"] == "待驗收":
-                    _receive_form(sel, its, pos, assets)
-
-                st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-                if po["status"] == "已作廢":
-                    st.caption("此採購單已作廢。")
-                elif has_pending_void(data, "採購單", sel):
-                    st.info("⏳ 此採購單已有待審核的作廢申請，請等待管理者處理。")
-                else:
-                    with st.expander("🗑️ 申請作廢這張採購單"):
-                        st.caption("送出後不會立即作廢，需由管理者在「作廢申請」頁審核。")
-                        vr_reason = st.text_area("作廢原因", key=f"vreason_po_{sel}", placeholder="例如：供應商或金額填錯、重複建立…")
-                        if st.button("送出作廢申請", key=f"vbtn_po_{sel}", disabled=not vr_reason.strip()):
-                            submit_void_request(data, "採購單", sel, vr_reason)
-                            flash("已送出作廢申請，待管理者審核")
-                            st.rerun()
+            sname1 = sup_name(sups, r.supplier_id)
+            label = f"{r.id}　·　{sname1}　·　{buyer}　·　{r.date}　·　{nt(po_total(items, r.id))}　·　{r.status}"
+            with st.expander(label):
+                _po_detail(data, r.id, pos, items, assets, sups)
 
     with tab_query:
         st.markdown(f"<div style='color:{SUB};font-size:14px;margin-bottom:8px'>輸入關鍵字，查詢歷次採購紀錄。會比對「品名」與「採購用途」（例如打「影印」找出影印紙；打「主日書房」找出用途含主日書房的採購）。</div>", unsafe_allow_html=True)
