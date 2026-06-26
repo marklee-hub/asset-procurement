@@ -137,23 +137,27 @@ def inject_css():
     .stTabs [data-baseweb="tab"] {{ font-weight:700; }}
     .stTabs [aria-selected="true"] {{ color:{JADE} !important; }}
 
-    /* 採購單：欄位對齊的可點列（扁平、相連） */
-    div[data-testid="stVerticalBlock"]:has(#po-rows) .stButton > button {{
+    /* 採購單／資產：欄位對齊的可點列（扁平、相連） */
+    div[data-testid="stVerticalBlock"]:has(#po-rows) .stButton > button,
+    div[data-testid="stVerticalBlock"]:has(#as-rows) .stButton > button {{
         border:none !important; border-radius:0 !important;
         background:transparent !important; box-shadow:none !important; transform:none !important;
         text-align:left !important; justify-content:flex-start !important;
         padding:6px 4px !important; font-weight:700 !important; color:{INK} !important;
         font-variant-numeric:tabular-nums;
     }}
-    div[data-testid="stVerticalBlock"]:has(#po-rows) .stButton > button:hover {{
+    div[data-testid="stVerticalBlock"]:has(#po-rows) .stButton > button:hover,
+    div[data-testid="stVerticalBlock"]:has(#as-rows) .stButton > button:hover {{
         background:{JADE_SOFT}66 !important; color:{JADE} !important;
     }}
-    div[data-testid="stVerticalBlock"]:has(#po-rows) .stButton > button[kind="primary"] {{
+    div[data-testid="stVerticalBlock"]:has(#po-rows) .stButton > button[kind="primary"],
+    div[data-testid="stVerticalBlock"]:has(#as-rows) .stButton > button[kind="primary"] {{
         background:transparent !important; color:{JADE} !important;
         box-shadow:inset 3px 0 0 {JADE} !important;
     }}
     /* 列分隔線 */
-    div[data-testid="stVerticalBlock"]:has(#po-rows) div[data-testid="stHorizontalBlock"] {{
+    div[data-testid="stVerticalBlock"]:has(#po-rows) div[data-testid="stHorizontalBlock"],
+    div[data-testid="stVerticalBlock"]:has(#as-rows) div[data-testid="stHorizontalBlock"] {{
         border-bottom:1px solid {LINE_SOFT}; align-items:center; padding:2px 0;
     }}
     .po-th {{ color:{FAINT}; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:8px 4px; }}
@@ -797,6 +801,49 @@ def _receive_form(po_id, its, pos, assets):
 
 
 # ============================ 資產 ============================
+def _asset_detail(a, assets):
+    st.markdown(
+        f"<div style='display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px'>"
+        f"{pill(a['asset_type'], ATYPE_STYLE)}{pill(a['status'], ASTATUS_STYLE)}</div>"
+        f"<table class='t'>"
+        f"<tr><td style='color:{SUB};width:90px'>財產編號</td><td style='font-weight:700'>{a['id']}</td></tr>"
+        f"<tr><td style='color:{SUB}'>品名</td><td>{a['name']}</td></tr>"
+        f"<tr><td style='color:{SUB}'>類別</td><td>{a['category']}</td></tr>"
+        f"<tr><td style='color:{SUB}'>價值</td><td style='font-variant-numeric:tabular-nums'>{nt(a['value'])}</td></tr>"
+        f"<tr><td style='color:{SUB}'>取得日期</td><td>{a['acquired']}</td></tr>"
+        f"<tr><td style='color:{SUB}'>來源</td><td>{a['source_po']}</td></tr>"
+        f"<tr><td style='color:{SUB}'>使用單位</td><td>{a['unit']}</td></tr></table>",
+        unsafe_allow_html=True)
+
+    if a["status"] == "已作廢":
+        st.caption("此資產已作廢。")
+        return
+    if not is_admin():
+        return  # 一般使用者：只能瀏覽
+
+    st.markdown(f"<div class='sect' style='margin-top:12px'>編輯</div>", unsafe_allow_html=True)
+    u, s = st.columns(2)
+    nu = u.selectbox("使用單位", UNITS, index=UNITS.index(a["unit"]) if a["unit"] in UNITS else 0, key=f"lu_{a['id']}")
+    ns = s.selectbox("狀態", ASSET_STATUS_OPTS, index=ASSET_STATUS_OPTS.index(a["status"]) if a["status"] in ASSET_STATUS_OPTS else 0, key=f"ls_{a['id']}")
+    if nu != a["unit"] or ns != a["status"]:
+        upd = assets.set_index("id")
+        upd.loc[a["id"], "unit"] = nu
+        upd.loc[a["id"], "status"] = ns
+        save("assets", upd.reset_index()[SCHEMAS["assets"]])
+        flash(f"已更新資產 {a['id']}")
+        st.rerun()
+
+    with st.expander("🗑️ 作廢這筆資產"):
+        st.caption("作廢後資料保留、僅標記為已作廢，不會出現在統計與單位配置。")
+        ck = st.checkbox("我確認要作廢這筆資產", key=f"vck_as_{a['id']}")
+        if st.button("確認作廢", key=f"vbtn_as_{a['id']}", disabled=not ck):
+            upd = assets.set_index("id")
+            upd.loc[a["id"], "status"] = "已作廢"
+            save("assets", upd.reset_index()[SCHEMAS["assets"]])
+            flash(f"資產 {a['id']} 已作廢")
+            st.rerun()
+
+
 def page_assets(data):
     assets = data["assets"]
     st.markdown("<h1>資產</h1><p style='color:#5A6472;margin-top:-8px'>所有列管資產皆可追溯來源採購單</p>", unsafe_allow_html=True)
@@ -822,46 +869,34 @@ def page_assets(data):
         total_val = view[view["status"] != "已報廢"]["value"].sum()
         st.caption(f"{len(view)} 筆 ・ 合計（排除已報廢）{nt(total_val)}")
 
-        cols = st.columns(3)
-        for i, a in enumerate(view.to_dict("records")):
-            with cols[i % 3]:
-                st.markdown(
-                    f"<div class='acard'><div style='display:flex;justify-content:space-between'>"
-                    f"<div><div class='aid'>{a['id']}</div><div class='anm'>{a['name']}</div><div class='acat'>{a['category']}</div></div>"
-                    f"<div style='text-align:right;display:flex;flex-direction:column;gap:4px;align-items:flex-end'>"
-                    f"{pill(a['asset_type'], ATYPE_STYLE)}{pill(a['status'], ASTATUS_STYLE)}</div></div>"
-                    f"<div style='display:flex;justify-content:space-between;font-size:12px;color:{SUB};margin-top:8px'>"
-                    f"<span>取得 {a['acquired']}</span><span class='aval'>{nt(a['value'])}</span></div>"
-                    f"<div style='font-size:12px;color:{JADE};font-weight:700;margin-top:4px'>📄 {a['source_po']}</div></div>",
-                    unsafe_allow_html=True)
-                if a["status"] == "已作廢":
-                    st.caption("此資產已作廢。")
-                    continue
-                if not is_admin():
-                    continue  # 一般使用者：只能瀏覽，不顯示任何操作
-                u, s = st.columns(2)
-                nu = u.selectbox("單位", UNITS, index=UNITS.index(a["unit"]) if a["unit"] in UNITS else 0,
-                                 key=f"lu_{a['id']}", label_visibility="collapsed")
-                ns = s.selectbox("狀態", ASSET_STATUS_OPTS, index=ASSET_STATUS_OPTS.index(a["status"]) if a["status"] in ASSET_STATUS_OPTS else 0,
-                                 key=f"ls_{a['id']}", label_visibility="collapsed")
-                if nu != a["unit"] or ns != a["status"]:
-                    upd = assets.set_index("id")
-                    upd.loc[a["id"], "unit"] = nu
-                    upd.loc[a["id"], "status"] = ns
-                    save("assets", upd.reset_index()[SCHEMAS["assets"]])
-                    flash(f"已更新資產 {a['id']}")
-                    st.rerun()
-                with st.expander("🗑️ 作廢這筆資產"):
-                    st.caption("作廢後資料保留、僅標記為已作廢，不會出現在統計與單位配置。")
-                    ck = st.checkbox("我確認要作廢這筆資產", key=f"vck_as_{a['id']}")
-                    if st.button("確認作廢", key=f"vbtn_as_{a['id']}", disabled=not ck):
-                        upd = assets.set_index("id")
-                        upd.loc[a["id"], "status"] = "已作廢"
-                        save("assets", upd.reset_index()[SCHEMAS["assets"]])
-                        flash(f"資產 {a['id']} 已作廢")
-                        st.rerun()
         if view.empty:
             st.info("沒有符合條件的資產")
+        else:
+            ADOT = {"使用中": "🟢", "維修中": "🟠", "已報廢": "⚫", "已作廢": "🔴"}
+            CDOT = {"列帳資產": "🔵", "列管資產": "🟢"}
+            AW = [1.3, 2, 1.2, 1, 1.1, 1]
+            cur = st.session_state.get("as_sel")
+            with st.container():
+                st.markdown("<span id='as-rows'></span>", unsafe_allow_html=True)
+                h = st.columns(AW)
+                for col, t, al in zip(h, ["財產編號", "品名", "分類", "單位", "價值", "狀態"],
+                                      ["left", "left", "left", "left", "right", "left"]):
+                    col.markdown(f"<div class='po-th' style='text-align:{al}'>{t}</div>", unsafe_allow_html=True)
+                for a in view.to_dict("records"):
+                    sel_now = (a["id"] == cur)
+                    c = st.columns(AW)
+                    if c[0].button(("▾ " if sel_now else "▸ ") + str(a["id"]), key=f"asrow_{a['id']}",
+                                   use_container_width=True, type="primary" if sel_now else "secondary"):
+                        st.session_state.as_sel = None if sel_now else a["id"]
+                        st.rerun()
+                    c[1].markdown(f"<div class='po-td'>{a['name']}</div>", unsafe_allow_html=True)
+                    c[2].markdown(f"<div class='po-td'>{CDOT.get(a['asset_type'],'')} {a['asset_type']}</div>", unsafe_allow_html=True)
+                    c[3].markdown(f"<div class='po-td'>{a['unit']}</div>", unsafe_allow_html=True)
+                    c[4].markdown(f"<div class='po-td' style='text-align:right;font-weight:800;font-variant-numeric:tabular-nums'>{nt(a['value'])}</div>", unsafe_allow_html=True)
+                    c[5].markdown(f"<div class='po-td'>{ADOT.get(a['status'],'')} {a['status']}</div>", unsafe_allow_html=True)
+                    if sel_now:
+                        with st.container(border=True):
+                            _asset_detail(a, assets)
 
     with tab_board:
         st.markdown(
