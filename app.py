@@ -900,37 +900,36 @@ def page_assets(data):
 
     with tab_board:
         st.markdown(
-            f"<div style='display:flex;gap:16px;align-items:center;background:#fff;border:1px solid {LINE};"
-            f"border-radius:12px;padding:10px 14px;font-size:13px;font-weight:600'>"
-            f"<span style='color:{SUB};font-weight:500'>顯示使用中的資產，依分類標色（改派單位請至「資產清單」）：</span>"
+            f"<div style='display:flex;gap:16px;align-items:center;flex-wrap:wrap;background:#fff;border:1px solid {LINE};"
+            f"border-radius:12px;padding:10px 14px;font-size:13px;font-weight:600;margin-bottom:12px'>"
+            f"<span style='color:{SUB};font-weight:500'>顯示各單位使用中的資產（改派單位請至「資產清單」）：</span>"
             f"<span style='display:inline-flex;align-items:center;gap:6px'><span style='width:12px;height:12px;border-radius:3px;background:{INDIGO};display:inline-block'></span>列帳資產 B26</span>"
             f"<span style='display:inline-flex;align-items:center;gap:6px'><span style='width:12px;height:12px;border-radius:3px;background:{JADE};display:inline-block'></span>列管資產 A26</span>"
             f"</div>",
             unsafe_allow_html=True)
-        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
         fixed = assets[(assets["asset_type"].isin(ASSET_RECORD_CLASSES)) & (~assets["status"].isin(["已報廢", "已作廢"]))]
-        cols = st.columns(len(UNITS))
-        for i, u in enumerate(UNITS):
-            with cols[i]:
-                sub = fixed[fixed["unit"] == u]
-                ledger = sub[sub["asset_type"] == "列帳資產"]
-                managed = sub[sub["asset_type"] == "列管資產"]
-                st.markdown(
-                    f"<div class='unit-head'><span>🏢 {u}</span><span style='color:{FAINT};font-size:12px'>{len(sub)} 件</span></div>"
-                    f"<div style='font-size:11px;font-weight:700;margin-bottom:8px;line-height:1.6'>"
-                    f"<span style='color:{INDIGO}'>列帳 {nt(ledger['value'].sum())}</span><br>"
-                    f"<span style='color:{JADE}'>列管 {nt(managed['value'].sum())}</span></div>",
-                    unsafe_allow_html=True)
-                for a in sub.to_dict("records"):
-                    is_ledger = a["asset_type"] == "列帳資產"
-                    accent = INDIGO if is_ledger else JADE
-                    soft = INDIGO_SOFT if is_ledger else JADE_SOFT
+        for u in UNITS:
+            sub = fixed[fixed["unit"] == u]
+            ledger = sub[sub["asset_type"] == "列帳資產"]
+            managed = sub[sub["asset_type"] == "列管資產"]
+            title = (f"🏢 {u}　·　{len(sub)} 件　·　"
+                     f"列帳 {nt(ledger['value'].sum())}　列管 {nt(managed['value'].sum())}")
+            with st.expander(title, expanded=False):
+                if sub.empty:
+                    st.caption("此單位目前沒有資產。")
+                else:
+                    rowhtml = ""
+                    for a in sub.sort_values("asset_type").to_dict("records"):
+                        is_ledger = a["asset_type"] == "列帳資產"
+                        accent = INDIGO if is_ledger else JADE
+                        soft = INDIGO_SOFT if is_ledger else JADE_SOFT
+                        rowhtml += (f"<tr><td style='border-left:4px solid {accent};padding-left:10px;font-weight:600'>{a['name']}</td>"
+                                    f"<td><span style='background:{soft};color:{accent};font-size:11px;font-weight:700;padding:1px 8px;border-radius:8px;white-space:nowrap'>{a['asset_type']}</span></td>"
+                                    f"<td style='color:{SUB};font-variant-numeric:tabular-nums'>{a['id']}</td>"
+                                    f"<td style='text-align:right;font-weight:700;font-variant-numeric:tabular-nums'>{nt(a['value'])}</td></tr>")
                     st.markdown(
-                        f"<div class='acard' style='padding:10px;border-left:4px solid {accent}'>"
-                        f"<div style='display:flex;justify-content:space-between;align-items:flex-start;gap:6px'>"
-                        f"<div style='font-weight:700;font-size:13px'>{a['name']}</div>"
-                        f"<span style='background:{soft};color:{accent};font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;white-space:nowrap'>{a['asset_type']}</span></div>"
-                        f"<div style='color:{SUB};font-size:11px;font-variant-numeric:tabular-nums;margin-top:2px'>{a['id']} ・ {nt(a['value'])}</div></div>",
+                        "<table class='t'><tr><th>品名</th><th>分類</th><th>財產編號</th>"
+                        f"<th style='text-align:right'>價值</th></tr>{rowhtml}</table>",
                         unsafe_allow_html=True)
 
     with tab_add:
