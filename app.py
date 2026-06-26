@@ -138,27 +138,27 @@ def inject_css():
     .stTabs [data-baseweb="tab"] {{ font-weight:700; }}
     .stTabs [aria-selected="true"] {{ color:{JADE} !important; }}
 
-    /* 採購單／資產：欄位對齊的可點列（扁平、相連） */
-    div[data-testid="stVerticalBlock"]:has(#po-rows) .stButton > button,
-    div[data-testid="stVerticalBlock"]:has(#as-rows) .stButton > button {{
+    /* 採購單／資產：欄位對齊的可點列（扁平、相連）— 只作用在專屬容器內 */
+    .st-key-po_rows_box .stButton > button,
+    .st-key-as_rows_box .stButton > button {{
         border:none !important; border-radius:0 !important;
         background:transparent !important; box-shadow:none !important; transform:none !important;
         text-align:left !important; justify-content:flex-start !important;
         padding:6px 4px !important; font-weight:700 !important; color:{INK} !important;
         font-variant-numeric:tabular-nums;
     }}
-    div[data-testid="stVerticalBlock"]:has(#po-rows) .stButton > button:hover,
-    div[data-testid="stVerticalBlock"]:has(#as-rows) .stButton > button:hover {{
+    .st-key-po_rows_box .stButton > button:hover,
+    .st-key-as_rows_box .stButton > button:hover {{
         background:{JADE_SOFT}66 !important; color:{JADE} !important;
     }}
-    div[data-testid="stVerticalBlock"]:has(#po-rows) .stButton > button[kind="primary"],
-    div[data-testid="stVerticalBlock"]:has(#as-rows) .stButton > button[kind="primary"] {{
+    .st-key-po_rows_box .stButton > button[kind="primary"],
+    .st-key-as_rows_box .stButton > button[kind="primary"] {{
         background:transparent !important; color:{JADE} !important;
         box-shadow:inset 3px 0 0 {JADE} !important;
     }}
     /* 列分隔線 */
-    div[data-testid="stVerticalBlock"]:has(#po-rows) div[data-testid="stHorizontalBlock"],
-    div[data-testid="stVerticalBlock"]:has(#as-rows) div[data-testid="stHorizontalBlock"] {{
+    .st-key-po_rows_box div[data-testid="stHorizontalBlock"],
+    .st-key-as_rows_box div[data-testid="stHorizontalBlock"] {{
         border-bottom:1px solid {LINE_SOFT}; align-items:center; padding:2px 0;
     }}
     .po-th {{ color:{FAINT}; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:8px 4px; }}
@@ -640,8 +640,7 @@ def page_procurement(data):
         if rows.empty:
             st.info("找不到符合的採購單")
         else:
-            with st.container():
-                st.markdown("<span id='po-rows'></span>", unsafe_allow_html=True)
+            with st.container(key="po_rows_box"):
                 # 標題列
                 h = st.columns(WIDTHS)
                 for col, t, al in zip(h, ["單號", "供應商", "採購人員", "採購日期", "金額", "狀態"],
@@ -915,8 +914,7 @@ def page_assets(data):
             CDOT = {"列帳資產": "🔵", "列管資產": "🟢"}
             AW = [1.3, 2, 1.2, 1, 1.1, 1]
             cur = st.session_state.get("as_sel")
-            with st.container():
-                st.markdown("<span id='as-rows'></span>", unsafe_allow_html=True)
+            with st.container(key="as_rows_box"):
                 h = st.columns(AW)
                 for col, t, al in zip(h, ["財產編號", "品名", "分類", "單位", "價值", "狀態"],
                                       ["left", "left", "left", "left", "right", "left"]):
