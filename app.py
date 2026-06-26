@@ -1236,12 +1236,12 @@ def main():
         st.markdown(f"<div style='font-size:12px;color:{role_color};font-weight:700;padding:0 2px 12px'>● {role_label}</div>",
                     unsafe_allow_html=True)
 
-        nav_items = [("儀表板", "📊"), ("採購", "🛒"), ("資產", "📦"), ("供應商", "👥")]
+        nav_items = ["儀表板", "採購", "資產", "供應商"]
         if is_admin():
-            nav_items += [("作廢申請", "🗑️"), ("設定", "⚙️")]
-        for label, icon in nav_items:
+            nav_items += ["作廢申請", "設定"]
+        for label in nav_items:
             active = st.session_state.page == label
-            if st.button(f"{icon}\u2002{label}", key=f"nav_{label}", use_container_width=True,
+            if st.button(label, key=f"nav_{label}", use_container_width=True,
                          type="primary" if active else "secondary"):
                 st.session_state.page = label
                 st.rerun()
