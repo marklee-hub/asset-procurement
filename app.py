@@ -739,23 +739,61 @@ def _receive_form(po_id, its, pos, assets):
             unit = c2.selectbox("單位", UNITS, key=f"u_{po_id}_{i}", label_visibility="collapsed")
             choices[i] = (aclass, unit)
     if st.button("確認入庫", type="primary", key=f"recv_{po_id}", use_container_width=True):
-        new_rows, used = [], set()
+        st.session_state[f"recv_confirm_{po_id}"] = True
+        st.rerun()
+
+    # 確認摘要：按下「確認入庫」後先跳出，需勾選＋再按一次才真正寫入
+    if st.session_state.get(f"recv_confirm_{po_id}"):
+        # 預先計算將入庫的內容
+        ledger_names, managed_names, skip_names = [], [], []
         for i, r in enumerate(rows_all.itertuples()):
             aclass, unit = choices[i]
-            if aclass not in ASSET_RECORD_CLASSES:      # 一般耗材：不入庫
-                continue
-            for _ in range(int(r.qty)):
-                aid, _p = new_asset_id(assets, aclass, used)
-                used.add(aid)
-                new_rows.append([aid, r.name, r.category, r.price, po_id,
-                                 date.today().isoformat(), aclass, unit, "使用中"])
-        if new_rows:
-            save("assets", pd.concat([assets, pd.DataFrame(new_rows, columns=SCHEMAS["assets"])], ignore_index=True))
-        save("purchase_orders", pos.assign(status=pos["status"].where(pos["id"] != po_id, "已驗收")))
-        nb = sum(1 for r in new_rows if r[6] == "列帳資產")
-        na = sum(1 for r in new_rows if r[6] == "列管資產")
-        flash(f"{po_id} 已驗收入庫：列帳資產 {nb} 筆、列管資產 {na} 筆")
-        st.rerun()
+            tag = f"{r.name} ×{int(r.qty)}（{unit}）"
+            if aclass == "列帳資產":
+                ledger_names.append(tag)
+            elif aclass == "列管資產":
+                managed_names.append(tag)
+            else:
+                skip_names.append(f"{r.name} ×{int(r.qty)}")
+        n_ledger = sum(int(r.qty) for i, r in enumerate(rows_all.itertuples()) if choices[i][0] == "列帳資產")
+        n_managed = sum(int(r.qty) for i, r in enumerate(rows_all.itertuples()) if choices[i][0] == "列管資產")
+
+        with st.container(border=True):
+            st.markdown(f"<div style='font-weight:800;color:{AMBER};font-size:15px'>⚠️ 即將入庫，請再次確認分類</div>", unsafe_allow_html=True)
+            lines = f"本次將新增 <b>{n_ledger + n_managed}</b> 筆資產："
+            if ledger_names:
+                lines += f"<br>・<b style='color:{INDIGO}'>列帳資產（B26）{n_ledger} 筆</b>：{'、'.join(ledger_names)}"
+            if managed_names:
+                lines += f"<br>・<b style='color:{JADE}'>列管資產（A26）{n_managed} 筆</b>：{'、'.join(managed_names)}"
+            if skip_names:
+                lines += f"<br>・<span style='color:{SUB}'>不列管（一般耗材）略過：{'、'.join(skip_names)}</span>"
+            st.markdown(f"<div style='font-size:14px;margin-top:6px;line-height:1.8'>{lines}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='color:{DANGER};font-size:13px;margin-top:8px'>確認後將正式寫入資產清單，入庫後不可復原（需作廢才能移除）。</div>", unsafe_allow_html=True)
+
+            ck = st.checkbox("我已確認分類無誤", key=f"recv_ck_{po_id}")
+            b1, b2 = st.columns(2)
+            if b1.button("✅ 確認入庫", type="primary", key=f"recv_go_{po_id}", disabled=not ck, use_container_width=True):
+                new_rows, used = [], set()
+                for i, r in enumerate(rows_all.itertuples()):
+                    aclass, unit = choices[i]
+                    if aclass not in ASSET_RECORD_CLASSES:      # 一般耗材：不入庫
+                        continue
+                    for _ in range(int(r.qty)):
+                        aid, _p = new_asset_id(assets, aclass, used)
+                        used.add(aid)
+                        new_rows.append([aid, r.name, r.category, r.price, po_id,
+                                         date.today().isoformat(), aclass, unit, "使用中"])
+                if new_rows:
+                    save("assets", pd.concat([assets, pd.DataFrame(new_rows, columns=SCHEMAS["assets"])], ignore_index=True))
+                save("purchase_orders", pos.assign(status=pos["status"].where(pos["id"] != po_id, "已驗收")))
+                nb = sum(1 for r in new_rows if r[6] == "列帳資產")
+                na = sum(1 for r in new_rows if r[6] == "列管資產")
+                st.session_state[f"recv_confirm_{po_id}"] = False
+                flash(f"{po_id} 已驗收入庫：列帳資產 {nb} 筆、列管資產 {na} 筆")
+                st.rerun()
+            if b2.button("取消", key=f"recv_cancel_{po_id}", use_container_width=True):
+                st.session_state[f"recv_confirm_{po_id}"] = False
+                st.rerun()
 
 
 # ============================ 資產 ============================
