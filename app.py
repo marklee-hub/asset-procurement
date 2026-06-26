@@ -14,13 +14,14 @@ from datetime import date, datetime
 # ============================ 設定 ============================
 st.set_page_config(page_title="採購・資產整合平台", page_icon="📦", layout="wide")
 
-# ---- 配色（對齊 React 版 tokens）----
-INK, SUB, FAINT = "#161A22", "#5A6472", "#8A93A2"
-LINE, LINE_SOFT = "#E4E8EE", "#EEF1F5"
-JADE, JADE_SOFT = "#0F766E", "#E2F1EF"
+# ---- 配色（藍色系）----
+INK, SUB, FAINT = "#1B2230", "#5A6472", "#8A93A2"
+LINE, LINE_SOFT = "#E2E7F0", "#EDF1F7"
+JADE, JADE_SOFT = "#4F67D8", "#E9EDFB"          # 主色（藍）／列管資產
 AMBER, AMBER_SOFT = "#B45309", "#FBEEDC"
-INDIGO, INDIGO_SOFT = "#4338CA", "#E7E7FA"
+INDIGO, INDIGO_SOFT = "#6D4FC0", "#ECE7FA"      # 列帳資產（紫）
 DANGER = "#B42318"
+BLUE_DEEP = "#3B53C4"                            # 主色加深（hover、漸層）
 
 CATEGORIES = ["3C設備", "辦公家具", "音響設備", "文宣品", "文具耗材", "其他"]
 DEFAULT_UNITS = ["傳道部", "行銷部", "影音部", "行政部", "神學院", "財務部"]
@@ -67,15 +68,15 @@ def inject_css():
     .block-container {{ padding-top: 2.2rem; padding-bottom: 3rem; max-width: 1140px; }}
 
     /* 側欄深色漸層 */
-    section[data-testid="stSidebar"] {{ background: linear-gradient(180deg,#16221F 0%,#0F1B19 100%); }}
+    section[data-testid="stSidebar"] {{ background: linear-gradient(180deg,#5566A6 0%,#43528A 100%); }}
     section[data-testid="stSidebar"] * {{ color: #C9D6D2; }}
     section[data-testid="stSidebar"] .brand-title {{ color:#fff; font-weight:800; font-size:1rem; }}
 
     /* 主按鈕：圓角＋陰影 */
     .stButton > button {{ border-radius:12px; font-weight:600; border:1px solid {LINE}; transition:all .15s ease; }}
     .stButton > button:hover {{ transform:translateY(-1px); }}
-    .stButton > button[kind="primary"] {{ background:{JADE}; border-color:{JADE}; box-shadow:0 6px 16px rgba(15,118,110,.25); }}
-    .stButton > button[kind="primary"]:hover {{ background:#0c655e; border-color:#0c655e; box-shadow:0 8px 20px rgba(15,118,110,.32); }}
+    .stButton > button[kind="primary"] {{ background:{JADE}; border-color:{JADE}; box-shadow:0 6px 16px rgba(79,103,216,.28); }}
+    .stButton > button[kind="primary"]:hover {{ background:{BLUE_DEEP}; border-color:{BLUE_DEEP}; box-shadow:0 8px 20px rgba(59,83,196,.32); }}
 
     /* 側欄導覽：乾淨無框、左對齊、選中highlight＋左側強調條 */
     section[data-testid="stSidebar"] .stButton > button {{
@@ -88,7 +89,7 @@ def inject_css():
         background:rgba(255,255,255,.07) !important; color:#fff !important;
     }}
     section[data-testid="stSidebar"] .stButton > button[kind="primary"] {{
-        background:rgba(15,118,110,.22) !important; color:#fff !important;
+        background:rgba(255,255,255,.18) !important; color:#fff !important;
         box-shadow:inset 3px 0 0 {JADE} !important;
     }}
 
@@ -97,7 +98,7 @@ def inject_css():
         border-radius:12px !important;
     }}
     .stTextInput input:focus, .stNumberInput input:focus, .stTextArea textarea:focus {{
-        border-color:{JADE} !important; box-shadow:0 0 0 2px rgba(15,118,110,.12) !important;
+        border-color:{JADE} !important; box-shadow:0 0 0 2px rgba(79,103,216,.16) !important;
     }}
 
     /* 標題 */
@@ -345,6 +346,36 @@ def nt(v) -> str:
         return "NT$0"
 
 
+# ---- 內嵌 SVG 線條圖示（取代 emoji）----
+_ICON_PATHS = {
+    "ledger": "<path d='M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z'/><path d='M14 3v5h5'/><path d='M9 13h6M9 17h6'/>",
+    "managed": "<path d='M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/>",
+    "stack": "<path d='M12 3 2 8l10 5 10-5z'/><path d='M2 14l10 5 10-5'/>",
+    "box": "<path d='M21 8 12 3 3 8l9 5 9-5z'/><path d='M3 8v8l9 5 9-5V8'/><path d='M12 13v8'/>",
+    "clipboard": "<rect x='8' y='3' width='8' height='4' rx='1'/><path d='M8 5H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2'/><path d='M9 12h6M9 16h4'/>",
+    "hourglass": "<path d='M6 3h12M6 21h12M7 3c0 5 10 6 10 9s-10 4-10 9M17 3c0 5-10 6-10 9s10 4 10 9'/>",
+    "check": "<path d='M9 12l2 2 4-4'/><circle cx='12' cy='12' r='9'/>",
+    "trash": "<path d='M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13'/>",
+    "ban": "<circle cx='12' cy='12' r='9'/><path d='M6 6l12 12'/>",
+    "cart": "<circle cx='9' cy='20' r='1.4'/><circle cx='18' cy='20' r='1.4'/><path d='M2 3h3l2.4 12.3a1 1 0 0 0 1 .7h9.2a1 1 0 0 0 1-.8L21 7H6'/>",
+    "users": "<circle cx='9' cy='8' r='3'/><path d='M2 21c0-3.5 3-6 7-6s7 2.5 7 6'/><path d='M16 7a3 3 0 0 1 0 6M22 21c0-2.5-1.5-4.5-4-5.4'/>",
+    "gear": "<circle cx='12' cy='12' r='3'/><path d='M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.3 1a7 7 0 0 0-1.7-1l-.3-2.5h-4l-.3 2.5a7 7 0 0 0-1.7 1l-2.3-1-2 3.4 2 1.5a7 7 0 0 0 0 2l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 1.7 1l.3 2.5h4l.3-2.5a7 7 0 0 0 1.7-1l2.3 1 2-3.4-2-1.5a7 7 0 0 0 .1-1z'/>",
+    "chart": "<path d='M4 20V10M10 20V4M16 20v-7M22 20H2'/>",
+}
+
+
+def icon(name, color=None, size=20, stroke=1.7):
+    color = color or INK
+    return (f"<svg width='{size}' height='{size}' viewBox='0 0 24 24' fill='none' "
+            f"stroke='{color}' stroke-width='{stroke}' stroke-linecap='round' stroke-linejoin='round'>"
+            f"{_ICON_PATHS.get(name, '')}</svg>")
+
+
+def icon_badge(name, color, soft, size=22):
+    return (f"<div style='width:44px;height:44px;border-radius:13px;background:{soft};"
+            f"display:flex;align-items:center;justify-content:center;flex-shrink:0'>{icon(name, color, size)}</div>")
+
+
 def next_po_id(pos):
     yr = date.today().year
     seq = len(pos[pos["id"].str.startswith(f"PO-{yr}-", na=False)]) + 1
@@ -425,13 +456,20 @@ def page_dashboard(data):
                 f"<div class='stat-value' style='color:{accent}'>{value}</div>"
                 f"<div class='stat-sub'>{sub}</div></div>")
 
-    # 第一排：資產總覽（筆數＋總值）
+    def istat(ic, icolor, isoft, label, value, accent, sub=""):
+        return (f"<div class='card' style='display:flex;align-items:center;gap:14px'>"
+                f"{icon_badge(ic, icolor, isoft)}"
+                f"<div><div class='stat-label'>{label}</div>"
+                f"<div class='stat-value' style='color:{accent};font-size:23px'>{value}</div>"
+                f"<div class='stat-sub'>{sub}</div></div></div>")
+
+    # 第一排：資產總覽（圖示卡）
     st.markdown(
         "<div class='grid4'>"
-        + stat("列帳資產", nt(ledger_val), INDIGO, f"{len(ledger)} 筆 ・ B26 ・ ≥ 8 萬")
-        + stat("列管資產", nt(managed_val), JADE, f"{len(managed)} 筆 ・ A26")
-        + stat("資產總值", nt(ledger_val + managed_val), INK, f"{len(live)} 筆有效資產")
-        + stat("資產總數", f"{len(live)}", SUB, "排除已報廢／已作廢")
+        + istat("ledger", INDIGO, INDIGO_SOFT, "列帳資產", nt(ledger_val), INDIGO, f"{len(ledger)} 筆 ・ B26 ・ ≥ 8 萬")
+        + istat("managed", JADE, JADE_SOFT, "列管資產", nt(managed_val), JADE, f"{len(managed)} 筆 ・ A26")
+        + istat("stack", "#3E7BB6", "#E4EEF8", "資產總值", nt(ledger_val + managed_val), INK, f"{len(live)} 筆有效資產")
+        + istat("box", AMBER, AMBER_SOFT, "資產總數", f"{len(live)}", SUB, "排除已報廢／已作廢")
         + "</div>", unsafe_allow_html=True)
 
     # 本年度採購金額（預算分佈）— 僅管理者可見
@@ -440,10 +478,10 @@ def page_dashboard(data):
         bl, br = st.columns([2, 3])
         with bl:
             st.markdown(
-                f"<div class='card' style='background:linear-gradient(135deg,{JADE} 0%,#0c655e 100%);border:none'>"
-                f"<div style='color:#CFE8E4;font-size:12px;font-weight:700;letter-spacing:.04em'>本年度採購總額</div>"
+                f"<div class='card' style='background:linear-gradient(135deg,{JADE} 0%,{BLUE_DEEP} 100%);border:none'>"
+                f"<div style='color:#D6DEFB;font-size:12px;font-weight:700;letter-spacing:.04em'>本年度採購總額</div>"
                 f"<div style='color:#fff;font-size:32px;font-weight:800;margin-top:6px;font-variant-numeric:tabular-nums'>{nt(year_spend)}</div>"
-                f"<div style='color:#CFE8E4;font-size:12px;margin-top:4px'>{len(year_ids)} 張採購單 ・ 含已下單未驗收</div></div>",
+                f"<div style='color:#D6DEFB;font-size:12px;margin-top:4px'>{len(year_ids)} 張採購單 ・ 含已下單未驗收</div></div>",
                 unsafe_allow_html=True)
         with br:
             with st.container(border=True):
@@ -475,30 +513,31 @@ def page_dashboard(data):
     repair = int((assets["status"] == "維修中").sum())
     scrap = int((assets["status"] == "已報廢").sum())
 
-    def todo(label, n, accent, sub):
-        badge = f"<span style='background:{accent};color:#fff;border-radius:999px;padding:1px 9px;font-size:13px;font-weight:800'>{n}</span>" if n else f"<span style='color:{FAINT};font-weight:800'>0</span>"
-        return (f"<div class='card' style='display:flex;justify-content:space-between;align-items:center'>"
-                f"<div><div style='font-weight:700'>{label}</div><div class='stat-sub'>{sub}</div></div>{badge}</div>")
+    def todo(ic, icolor, isoft, label, n, accent, sub):
+        badge = f"<span style='background:{accent};color:#fff;border-radius:999px;padding:2px 11px;font-size:14px;font-weight:800'>{n}</span>" if n else f"<span style='color:{FAINT};font-weight:800;font-size:15px'>0</span>"
+        return (f"<div class='card' style='display:flex;align-items:center;gap:14px'>"
+                f"{icon_badge(ic, icolor, isoft)}"
+                f"<div style='flex:1'><div style='font-weight:700'>{label}</div><div class='stat-sub'>{sub}</div></div>{badge}</div>")
 
     st.markdown("<div style='height:14px'></div><div class='sect'>待辦事項</div>", unsafe_allow_html=True)
     if is_admin():
         st.markdown(
             "<div class='grid2'>"
-            + todo("待驗收採購單", len(pending), AMBER, f"金額合計 {nt(pending_amt)}")
-            + todo("待審核作廢申請", pending_void, DANGER, "前台送出、等你核准")
+            + todo("clipboard", JADE, JADE_SOFT, "待驗收採購單", len(pending), AMBER, f"金額合計 {nt(pending_amt)}")
+            + todo("hourglass", AMBER, AMBER_SOFT, "待審核作廢申請", pending_void, DANGER, "前台送出、等你核准")
             + "</div>", unsafe_allow_html=True)
     else:
         st.markdown("<div class='grid2'>"
-                    + todo("待驗收採購單", len(pending), AMBER, f"金額合計 {nt(pending_amt)}")
+                    + todo("clipboard", JADE, JADE_SOFT, "待驗收採購單", len(pending), AMBER, f"金額合計 {nt(pending_amt)}")
                     + "</div>", unsafe_allow_html=True)
 
     st.markdown("<div style='height:14px'></div><div class='sect'>資產狀態</div>", unsafe_allow_html=True)
     st.markdown(
         "<div class='grid4'>"
-        + stat("使用中", f"{using}", JADE, "有效資產")
-        + stat("維修中", f"{repair}", AMBER, "需追蹤")
-        + stat("已報廢", f"{scrap}", DANGER, "")
-        + stat("供應商", f"{len(sups)}", SUB, "合作廠商數")
+        + istat("check", JADE, JADE_SOFT, "使用中", f"{using}", JADE, "有效資產")
+        + istat("gear", AMBER, AMBER_SOFT, "維修中", f"{repair}", AMBER, "需追蹤")
+        + istat("trash", DANGER, "#F3EDED", "已報廢", f"{scrap}", DANGER, "")
+        + istat("users", "#3E7BB6", "#E4EEF8", "供應商", f"{len(sups)}", SUB, "合作廠商數")
         + "</div>", unsafe_allow_html=True)
 
     # 第三排：各單位資產值長條圖 ＋ 待驗收清單
