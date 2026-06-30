@@ -1174,6 +1174,69 @@ def _apply_void(data, target_type, target_id):
             save("assets", upd.reset_index()[SCHEMAS["assets"]])
 
 
+# ============================ 使用說明 / 常見問題 ============================
+def page_help(data):
+    st.markdown("<h1>使用說明</h1><p style='color:#5A6472;margin-top:-8px'>系統操作流程與常見問題</p>", unsafe_allow_html=True)
+
+    admin = is_admin()
+    st.markdown(f"<div style='background:{JADE_SOFT};color:{JADE};border-radius:12px;padding:10px 14px;"
+                f"font-size:13px;font-weight:600;margin-bottom:14px'>你目前的身分：{'管理者（可驗收、審核、管理）' if admin else '一般使用者（可瀏覽、開單、申請）'}</div>",
+                unsafe_allow_html=True)
+
+    # 整體流程
+    st.markdown("<div class='sect'>整體流程</div>", unsafe_allow_html=True)
+    flow = ["① 新增採購單（選供應商、填用途、品項）",
+            "② 送出 → 狀態變「待驗收」",
+            "③ 管理者驗收入庫 → 逐項分類（列管／列帳／耗材）並確認",
+            "④ 列管(A26)、列帳(B26)資產自動進入「資產清單」",
+            "⑤ 在「資產」管理單位、狀態；在「單位配置」看各單位資產"]
+    st.markdown("<div class='card'>" + "<br>".join(
+        f"<span style='font-weight:600'>{s}</span>" for s in flow) + "</div>", unsafe_allow_html=True)
+
+    # 名詞說明
+    st.markdown("<div class='sect' style='margin-top:18px'>分類名詞</div>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='card'><table class='t'>"
+        f"<tr><td style='font-weight:700;color:{INDIGO};width:110px'>列帳資產</td><td>單價 ≥ NT$80,000 的資產，財產編號 <b>B26-xxxx</b>，需入帳追蹤。</td></tr>"
+        f"<tr><td style='font-weight:700;color:{JADE}'>列管資產</td><td>需追蹤但未達 8 萬的資產，財產編號 <b>A26-xxxx</b>。</td></tr>"
+        f"<tr><td style='font-weight:700;color:{SUB}'>一般耗材</td><td>消耗品，不列管、不給編號、不進資產清單。</td></tr>"
+        f"</table></div>", unsafe_allow_html=True)
+
+    # 常見問題
+    st.markdown("<div class='sect' style='margin-top:18px'>常見問題</div>", unsafe_allow_html=True)
+
+    faqs = [
+        ("怎麼新增一張採購單？",
+         "到「採購 → ＋ 新增採購單」，選供應商、填採購用途（必填）、採購人員與日期，"
+         "在下方表格逐列填品名、類別、數量、單價，最後按「送出（待驗收）」即可。若還沒確定可先「存為草稿」。"),
+        ("找不到供應商怎麼辦？",
+         "先到「供應商 → ＋ 新增供應商」建立廠商（含統編、聯絡人、電話、備註），之後採購單就選得到。"),
+        ("採購單填錯了可以改嗎？",
+         "為避免資料被任意更動，前台不能直接修改或刪除採購單。請到該採購單明細點開，"
+         "用「🗑️ 申請作廢」送出原因，由管理者審核作廢後重開一張正確的。"),
+        ("驗收入庫是什麼？要怎麼做？",
+         "採購的東西實際收到後，由管理者在採購單明細按「確認入庫」，逐項選擇要列為列管／列帳／一般耗材，"
+         "系統會跳出確認摘要，勾選確認後才正式建立資產。耗材不會變成資產。"),
+        ("財產編號 A26 和 B26 有什麼不同？",
+         "A26 開頭是「列管資產」、B26 開頭是「列帳資產」（單價 ≥ 8 萬）。系統會依金額自動建議，入庫時可調整。"),
+        ("怎麼查以前買過什麼？",
+         "到「採購 → 🔍 品項查詢」，輸入關鍵字（會比對品名與採購用途），即可看到歷次採購的日期、數量、單價與總計。"),
+        ("資產的使用單位／狀態怎麼改？",
+         "管理者在「資產 → 資產清單」點開該筆資產，於展開內容調整使用單位或狀態（使用中／維修中／已報廢）。一般使用者僅能瀏覽。"),
+        ("單位（部門）可以自己新增嗎？",
+         "可以，但僅限管理者。到「設定」頁新增或刪除單位，採購與資產的單位選單會即時更新（仍有資產使用中的單位無法刪除）。"),
+        ("資產要報廢或作廢怎麼處理？",
+         "報廢是把資產狀態改為「已報廢」（仍保留紀錄）；作廢是登錄錯誤要註銷，由管理者在資產展開頁勾選確認後直接作廢。兩者資料都會保留、不真正刪除。"),
+        ("我看不到「作廢申請」或「設定」？",
+         "這兩個是管理者專用功能。若你是用一般密碼登入就不會顯示，屬正常現象。"),
+    ]
+    for q, a in faqs:
+        with st.expander(q):
+            st.markdown(f"<div style='color:{SUB};font-size:14px;line-height:1.8'>{a}</div>", unsafe_allow_html=True)
+
+    st.caption("有操作問題或發現異常，請聯絡系統管理者協助。")
+
+
 # ============================ 設定（單位管理） ============================
 def page_settings(data):
     assets = data["assets"]
@@ -1228,15 +1291,13 @@ def main():
     with st.sidebar:
         role_label = "管理者" if is_admin() else "一般使用者"
         role_color = JADE if is_admin() else SUB
-        st.markdown("<div style='display:flex;align-items:center;gap:9px;padding:6px 2px 4px'>"
-                    f"<div style='width:34px;height:34px;border-radius:10px;background:{JADE};display:flex;"
-                    "align-items:center;justify-content:center;font-size:18px'>📦</div>"
-                    "<div><div class='brand-title'>行政後勤</div>"
-                    "<div style='font-size:12px'>採購・資產整合平台</div></div></div>", unsafe_allow_html=True)
+        st.markdown("<div style='padding:8px 2px 4px'>"
+                    "<div class='brand-title'>行政後勤</div>"
+                    "<div style='font-size:12px'>採購・資產整合平台</div></div>", unsafe_allow_html=True)
         st.markdown(f"<div style='font-size:12px;color:{role_color};font-weight:700;padding:0 2px 12px'>● {role_label}</div>",
                     unsafe_allow_html=True)
 
-        nav_items = ["儀表板", "採購", "資產", "供應商"]
+        nav_items = ["儀表板", "採購", "資產", "供應商", "使用說明"]
         if is_admin():
             nav_items += ["作廢申請", "設定"]
         for label in nav_items:
@@ -1282,7 +1343,7 @@ def main():
         st.session_state.page = "儀表板"
 
     {"儀表板": page_dashboard, "採購": page_procurement,
-     "資產": page_assets, "供應商": page_suppliers,
+     "資產": page_assets, "供應商": page_suppliers, "使用說明": page_help,
      "作廢申請": page_void, "設定": page_settings}[st.session_state.page](data)
 
 
