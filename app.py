@@ -69,7 +69,7 @@ def inject_css():
 
     /* 側欄深色漸層 */
     section[data-testid="stSidebar"] {{ background: linear-gradient(180deg,#5566A6 0%,#43528A 100%); }}
-    section[data-testid="stSidebar"] * {{ color: #C9D6D2; }}
+    section[data-testid="stSidebar"] * {{ color: #DCE3F5; }}
     section[data-testid="stSidebar"] .brand-title {{ color:#fff; font-weight:800; font-size:1rem; }}
 
     /* 主按鈕：圓角＋陰影 */
@@ -80,7 +80,7 @@ def inject_css():
 
     /* 側欄導覽：乾淨無框、左對齊、選中highlight＋左側強調條 */
     section[data-testid="stSidebar"] .stButton > button {{
-        border:none !important; background:transparent !important; color:#C9D6D2 !important;
+        border:none !important; background:transparent !important; color:#E4E9F7 !important;
         justify-content:flex-start !important; text-align:left !important;
         font-weight:600; border-radius:11px; padding:10px 14px; box-shadow:none !important; transform:none !important;
     }}
@@ -1290,7 +1290,7 @@ def main():
 
     with st.sidebar:
         role_label = "管理者" if is_admin() else "一般使用者"
-        role_color = JADE if is_admin() else SUB
+        role_color = "#FFFFFF" if is_admin() else "#C9D4F0"
         st.markdown("<div style='padding:8px 2px 4px'>"
                     "<div class='brand-title'>行政後勤</div>"
                     "<div style='font-size:12px'>採購・資產整合平台</div></div>", unsafe_allow_html=True)
