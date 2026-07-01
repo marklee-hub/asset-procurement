@@ -107,7 +107,15 @@ def inject_css():
 
     /* 卡片系統：柔和陰影＋hover 微浮 */
     .card {{ background:#fff; border:1px solid {LINE}; border-radius:18px; padding:18px;
-             box-shadow:0 1px 3px rgba(16,24,40,.04), 0 1px 2px rgba(16,24,40,.03); }}
+             box-shadow:0 1px 3px rgba(16,24,40,.04), 0 1px 2px rgba(16,24,40,.03);
+             transition:transform .18s ease, box-shadow .18s ease; }}
+    .card:hover {{ box-shadow:0 6px 20px rgba(16,24,40,.07), 0 2px 6px rgba(16,24,40,.04); }}
+
+    /* 主內容淡入 */
+    @keyframes fadeUp {{ from {{ opacity:0; transform:translateY(8px); }} to {{ opacity:1; transform:none; }} }}
+    .block-container > div {{ animation: fadeUp .35s ease both; }}
+    /* 展開明細淡入 */
+    [data-testid="stExpander"] {{ transition: all .2s ease; }}
     .grid4 {{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }}
     .grid2 {{ display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }}
     @media (max-width:760px){{ .grid4{{grid-template-columns:repeat(2,1fr)}} .grid2{{grid-template-columns:1fr}} }}
@@ -172,6 +180,20 @@ def pill(text, style_map):
     return f"<span class='pill' style='background:{bg};color:{fg}'>{text}</span>"
 
 
+# 狀態對應色（給乾淨的 CSS 小圓點用，取代 emoji）
+STATUS_DOT_COLOR = {
+    "已驗收": "#2E9E6B", "待驗收": AMBER, "草稿": FAINT, "已作廢": DANGER,
+    "使用中": "#2E9E6B", "維修中": AMBER, "已報廢": "#6B7280",
+    "列帳資產": INDIGO, "列管資產": JADE,
+}
+
+
+def dot(key, size=8):
+    c = STATUS_DOT_COLOR.get(key, FAINT)
+    return (f"<span style='display:inline-block;width:{size}px;height:{size}px;border-radius:50%;"
+            f"background:{c};margin-right:7px;vertical-align:middle'></span>")
+
+
 def flash(msg):
     """暫存提示訊息，rerun 後以 toast 顯示。"""
     st.session_state["_flash"] = msg
@@ -187,8 +209,8 @@ def require_login() -> bool:
         st.markdown("<div style='height:9vh'></div>", unsafe_allow_html=True)
         st.markdown(
             f"<div class='card' style='text-align:center;padding:40px 32px'>"
-            f"<div style='width:54px;height:54px;border-radius:15px;background:{JADE};margin:0 auto 16px;"
-            f"display:flex;align-items:center;justify-content:center;font-size:26px'>📦</div>"
+            f"<div style='width:54px;height:54px;border-radius:15px;background:{JADE_SOFT};margin:0 auto 16px;"
+            f"display:flex;align-items:center;justify-content:center'>{icon('box', JADE, 28)}</div>"
             f"<div style='font-size:23px;font-weight:800;white-space:nowrap;letter-spacing:.01em;color:{INK}'>採購・資產整合平台</div>"
             f"<div style='color:{SUB};font-size:14px;margin-top:8px'>請輸入密碼登入</div></div>",
             unsafe_allow_html=True)
@@ -603,7 +625,7 @@ def _po_detail(data, sel, pos, items, assets, sups):
     elif has_pending_void(data, "採購單", sel):
         st.info("⏳ 此採購單已有待審核的作廢申請，請等待管理者處理。")
     else:
-        with st.expander("🗑️ 申請作廢這張採購單"):
+        with st.expander("申請作廢這張採購單"):
             st.caption("送出後不會立即作廢，需由管理者在「作廢申請」頁審核。")
             vr_reason = st.text_area("作廢原因", key=f"vreason_po_{sel}", placeholder="例如：供應商或金額填錯、重複建立…")
             if st.button("送出作廢申請", key=f"vbtn_po_{sel}", disabled=not vr_reason.strip()):
@@ -615,7 +637,7 @@ def _po_detail(data, sel, pos, items, assets, sups):
 def page_procurement(data):
     pos, items, assets, sups = data["purchase_orders"], data["po_items"], data["assets"], data["suppliers"]
     st.markdown("<h1>採購</h1><p style='color:#5A6472;margin-top:-8px'>採購單管理；驗收時分類為列管／列帳資產或一般耗材</p>", unsafe_allow_html=True)
-    tab_list, tab_query, tab_new = st.tabs(["採購單清單", "🔍 品項查詢", "＋ 新增採購單"])
+    tab_list, tab_query, tab_new = st.tabs(["採購單清單", "品項查詢", "＋ 新增採購單"])
 
     with tab_list:
         q = st.text_input("搜尋", placeholder="輸入單號、採購人員、供應商名稱或統一編號查詢…", label_visibility="collapsed")
@@ -634,7 +656,6 @@ def page_procurement(data):
         rows = rows.sort_values("date", ascending=False)
         st.caption(f"{len(rows)} 張採購單　·　點任一列展開明細")
 
-        DOT = {"已驗收": "🟢", "待驗收": "🟠", "草稿": "⚪", "已作廢": "🔴"}
         WIDTHS = [1.3, 2, 1, 1.2, 1.2, 1.1]
         cur = st.session_state.get("po_sel")
         if rows.empty:
@@ -649,10 +670,9 @@ def page_procurement(data):
                 # 資料列
                 for r in rows.itertuples():
                     buyer = getattr(r, "buyer", "") or "—"
-                    dot = DOT.get(r.status, "⚪")
                     c = st.columns(WIDTHS)
                     sel_now = (r.id == cur)
-                    if c[0].button(("▾ " if sel_now else "▸ ") + str(r.id), key=f"porow_{r.id}", use_container_width=True,
+                    if c[0].button(("−  " if sel_now else "+  ") + str(r.id), key=f"porow_{r.id}", use_container_width=True,
                                    type="primary" if sel_now else "secondary"):
                         st.session_state.po_sel = None if sel_now else r.id
                         st.rerun()
@@ -660,7 +680,7 @@ def page_procurement(data):
                     c[2].markdown(f"<div class='po-td'>{buyer}</div>", unsafe_allow_html=True)
                     c[3].markdown(f"<div class='po-td' style='font-variant-numeric:tabular-nums'>{r.date}</div>", unsafe_allow_html=True)
                     c[4].markdown(f"<div class='po-td' style='text-align:right;font-weight:800;font-variant-numeric:tabular-nums'>{nt(po_total(items, r.id))}</div>", unsafe_allow_html=True)
-                    c[5].markdown(f"<div class='po-td'>{dot} {r.status}</div>", unsafe_allow_html=True)
+                    c[5].markdown(f"<div class='po-td'>{dot(r.status)}{r.status}</div>", unsafe_allow_html=True)
                     if sel_now:
                         with st.container(border=True):
                             _po_detail(data, r.id, pos, items, assets, sups)
@@ -709,17 +729,17 @@ def page_procurement(data):
                     + "</div><div style='height:12px'></div>", unsafe_allow_html=True)
 
                 # 明細表
-                head = ("<tr><th>採購日期</th><th>品名</th><th>採購用途</th><th>供應商</th><th style='text-align:right'>數量</th>"
-                        "<th style='text-align:right'>單價</th><th style='text-align:right'>小計</th><th>單號</th></tr>")
+                head = ("<tr><th>單號</th><th>採購日期</th><th>品名</th><th>採購用途</th><th>供應商</th><th style='text-align:right'>數量</th>"
+                        "<th style='text-align:right'>單價</th><th style='text-align:right'>小計</th></tr>")
                 body = ""
                 for r in hit.itertuples():
-                    body += (f"<tr><td style='font-variant-numeric:tabular-nums'>{r.日期}</td>"
+                    body += (f"<tr><td style='font-weight:700'>{r.po_id}</td>"
+                             f"<td style='font-variant-numeric:tabular-nums'>{r.日期}</td>"
                              f"<td style='font-weight:600'>{r.name}</td><td style='color:{SUB}'>{r.用途 or '—'}</td>"
                              f"<td style='color:{SUB}'>{r.供應商}</td>"
                              f"<td style='text-align:right;font-variant-numeric:tabular-nums'>{int(r.qty)}</td>"
                              f"<td style='text-align:right;font-variant-numeric:tabular-nums'>{nt(r.price)}</td>"
-                             f"<td style='text-align:right;font-weight:700;font-variant-numeric:tabular-nums'>{nt(r.小計)}</td>"
-                             f"<td style='color:{SUB}'>{r.po_id}</td></tr>")
+                             f"<td style='text-align:right;font-weight:700;font-variant-numeric:tabular-nums'>{nt(r.小計)}</td></tr>")
                 st.markdown(f"<div class='card' style='padding:4px'><table class='t'>{head}{body}</table></div>", unsafe_allow_html=True)
 
     with tab_new:
@@ -745,7 +765,7 @@ def page_procurement(data):
         valid = edited[edited["品名"].astype(str).str.strip() != ""]
         ok = (not valid.empty) and bool(purpose.strip())
         if not purpose.strip():
-            st.caption("⚠️ 採購用途為必填")
+            st.caption("採購用途為必填")
         c1, c2 = st.columns(2)
         if c1.button("存為草稿", disabled=not ok, use_container_width=True):
             _create_po(chosen, sup_map, valid, "草稿", pos, items, purpose, buyer, purchase_date, note)
@@ -801,7 +821,7 @@ def _receive_form(po_id, its, pos, assets):
         n_managed = sum(int(r.qty) for i, r in enumerate(rows_all.itertuples()) if choices[i][0] == "列管資產")
 
         with st.container(border=True):
-            st.markdown(f"<div style='font-weight:800;color:{AMBER};font-size:15px'>⚠️ 即將入庫，請再次確認分類</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-weight:800;color:{AMBER};font-size:15px'>即將入庫，請再次確認分類</div>", unsafe_allow_html=True)
             lines = f"本次將新增 <b>{n_ledger + n_managed}</b> 筆資產："
             if ledger_names:
                 lines += f"<br>・<b style='color:{INDIGO}'>列帳資產（B26）{n_ledger} 筆</b>：{'、'.join(ledger_names)}"
@@ -814,7 +834,7 @@ def _receive_form(po_id, its, pos, assets):
 
             ck = st.checkbox("我已確認分類無誤", key=f"recv_ck_{po_id}")
             b1, b2 = st.columns(2)
-            if b1.button("✅ 確認入庫", type="primary", key=f"recv_go_{po_id}", disabled=not ck, use_container_width=True):
+            if b1.button("確認入庫", type="primary", key=f"recv_go_{po_id}", disabled=not ck, use_container_width=True):
                 new_rows, used = [], set()
                 for i, r in enumerate(rows_all.itertuples()):
                     aclass, unit = choices[i]
@@ -871,7 +891,7 @@ def _asset_detail(a, assets):
         flash(f"已更新資產 {a['id']}")
         st.rerun()
 
-    with st.expander("🗑️ 作廢這筆資產"):
+    with st.expander("作廢這筆資產"):
         st.caption("作廢後資料保留、僅標記為已作廢，不會出現在統計與單位配置。")
         ck = st.checkbox("我確認要作廢這筆資產", key=f"vck_as_{a['id']}")
         if st.button("確認作廢", key=f"vbtn_as_{a['id']}", disabled=not ck):
@@ -910,8 +930,6 @@ def page_assets(data):
         if view.empty:
             st.info("沒有符合條件的資產")
         else:
-            ADOT = {"使用中": "🟢", "維修中": "🟠", "已報廢": "⚫", "已作廢": "🔴"}
-            CDOT = {"列帳資產": "🔵", "列管資產": "🟢"}
             AW = [1.3, 2, 1.2, 1, 1.1, 1]
             cur = st.session_state.get("as_sel")
             with st.container(key="as_rows_box"):
@@ -922,15 +940,15 @@ def page_assets(data):
                 for a in view.to_dict("records"):
                     sel_now = (a["id"] == cur)
                     c = st.columns(AW)
-                    if c[0].button(("▾ " if sel_now else "▸ ") + str(a["id"]), key=f"asrow_{a['id']}",
+                    if c[0].button(("−  " if sel_now else "+  ") + str(a["id"]), key=f"asrow_{a['id']}",
                                    use_container_width=True, type="primary" if sel_now else "secondary"):
                         st.session_state.as_sel = None if sel_now else a["id"]
                         st.rerun()
                     c[1].markdown(f"<div class='po-td'>{a['name']}</div>", unsafe_allow_html=True)
-                    c[2].markdown(f"<div class='po-td'>{CDOT.get(a['asset_type'],'')} {a['asset_type']}</div>", unsafe_allow_html=True)
+                    c[2].markdown(f"<div class='po-td'>{dot(a['asset_type'])}{a['asset_type']}</div>", unsafe_allow_html=True)
                     c[3].markdown(f"<div class='po-td'>{a['unit']}</div>", unsafe_allow_html=True)
                     c[4].markdown(f"<div class='po-td' style='text-align:right;font-weight:800;font-variant-numeric:tabular-nums'>{nt(a['value'])}</div>", unsafe_allow_html=True)
-                    c[5].markdown(f"<div class='po-td'>{ADOT.get(a['status'],'')} {a['status']}</div>", unsafe_allow_html=True)
+                    c[5].markdown(f"<div class='po-td'>{dot(a['status'])}{a['status']}</div>", unsafe_allow_html=True)
                     if sel_now:
                         with st.container(border=True):
                             _asset_detail(a, assets)
@@ -949,7 +967,7 @@ def page_assets(data):
             sub = fixed[fixed["unit"] == u]
             ledger = sub[sub["asset_type"] == "列帳資產"]
             managed = sub[sub["asset_type"] == "列管資產"]
-            title = (f"🏢 {u}　·　{len(sub)} 件　·　"
+            title = (f"{u}　·　{len(sub)} 件　·　"
                      f"列帳 {nt(ledger['value'].sum())}　列管 {nt(managed['value'].sum())}")
             with st.expander(title, expanded=False):
                 if sub.empty:
@@ -989,7 +1007,7 @@ def _asset_manual_add(assets):
         a5, a6 = st.columns(2)
         default_class = "列帳資產" if m_value >= LEDGER_THRESHOLD else "列管資產"
         if m_value >= LEDGER_THRESHOLD:
-            st.info(f"💡 金額已達 {nt(LEDGER_THRESHOLD)}，建議分類為「列帳資產」（編號 B26）。已自動帶入，如需調整可改選下方分類。")
+            st.info(f"金額已達 {nt(LEDGER_THRESHOLD)}，建議分類為「列帳資產」（編號 B26）。已自動帶入，如需調整可改選下方分類。")
         m_type = a5.radio("資產分類", ASSET_RECORD_CLASSES, index=ASSET_RECORD_CLASSES.index(default_class),
                           horizontal=True, key="m_type",
                           help=f"≥ {nt(LEDGER_THRESHOLD)} 建議列帳資產（B26）；其餘列管資產（A26）")
@@ -1028,7 +1046,7 @@ def page_suppliers(data):
             n = int((pos["supplier_id"] == s.id).sum())
             note = (getattr(s, "note", "") or "").strip()
             note_html = (f"<div style='border-top:1px solid {LINE_SOFT};margin-top:10px;padding-top:10px;"
-                         f"color:{SUB};font-size:13px'>📝 {note}</div>") if note else ""
+                         f"color:{SUB};font-size:13px'>{note}</div>") if note else ""
             cards += (f"<div class='card'><div style='display:flex;justify-content:space-between;align-items:flex-start'>"
                       f"<div><div style='font-weight:800;font-size:16px'>{s.name}</div>"
                       f"<div style='color:{SUB};font-size:12px;margin-top:2px'>統編 {s.tax_id}</div></div>"
@@ -1132,15 +1150,15 @@ def page_void(data):
                 f"<div style='color:{SUB};font-size:13px;margin-top:4px'>{detail}</div></div>"
                 f"<span style='color:{FAINT};font-size:12px;white-space:nowrap'>{r.requested_at}</span></div>"
                 f"<div style='margin-top:8px;background:{AMBER_SOFT};color:{AMBER};border-radius:8px;padding:6px 10px;font-size:13px'>"
-                f"📝 作廢原因：{r.reason}</div>",
+                f"作廢原因：{r.reason}</div>",
                 unsafe_allow_html=True)
             b1, b2 = st.columns(2)
-            if b1.button("✅ 核准作廢", key=f"ok_{r.req_id}", type="primary", use_container_width=True):
+            if b1.button("核准作廢", key=f"ok_{r.req_id}", type="primary", use_container_width=True):
                 _apply_void(data, r.target_type, r.target_id)
                 _set_void_status(vr, r.req_id, "已核准")
                 flash(f"已核准作廢：{r.target_type} {r.target_id}")
                 st.rerun()
-            if b2.button("✕ 駁回", key=f"no_{r.req_id}", use_container_width=True):
+            if b2.button("駁回", key=f"no_{r.req_id}", use_container_width=True):
                 _set_void_status(vr, r.req_id, "已駁回")
                 flash(f"已駁回作廢申請：{r.target_type} {r.target_id}")
                 st.rerun()
@@ -1213,14 +1231,14 @@ def page_help(data):
          "先到「供應商 → ＋ 新增供應商」建立廠商（含統編、聯絡人、電話、備註），之後採購單就選得到。"),
         ("採購單填錯了可以改嗎？",
          "為避免資料被任意更動，前台不能直接修改或刪除採購單。請到該採購單明細點開，"
-         "用「🗑️ 申請作廢」送出原因，由管理者審核作廢後重開一張正確的。"),
+         "用「申請作廢」送出原因，由管理者審核作廢後重開一張正確的。"),
         ("驗收入庫是什麼？要怎麼做？",
          "採購的東西實際收到後，由管理者在採購單明細按「確認入庫」，逐項選擇要列為列管／列帳／一般耗材，"
          "系統會跳出確認摘要，勾選確認後才正式建立資產。耗材不會變成資產。"),
         ("財產編號 A26 和 B26 有什麼不同？",
          "A26 開頭是「列管資產」、B26 開頭是「列帳資產」（單價 ≥ 8 萬）。系統會依金額自動建議，入庫時可調整。"),
         ("怎麼查以前買過什麼？",
-         "到「採購 → 🔍 品項查詢」，輸入關鍵字（會比對品名與採購用途），即可看到歷次採購的日期、數量、單價與總計。"),
+         "到「採購 → 品項查詢」，輸入關鍵字（會比對品名與採購用途），即可看到歷次採購的日期、數量、單價與總計。"),
         ("資產的使用單位／狀態怎麼改？",
          "管理者在「資產 → 資產清單」點開該筆資產，於展開內容調整使用單位或狀態（使用中／維修中／已報廢）。一般使用者僅能瀏覽。"),
         ("單位（部門）可以自己新增嗎？",
@@ -1263,7 +1281,7 @@ def page_settings(data):
         col1, col2 = st.columns([4, 1])
         col1.markdown(
             f"<div class='card' style='padding:12px 16px;display:flex;justify-content:space-between;align-items:center'>"
-            f"<span style='font-weight:700'>🏢 {u}</span>"
+            f"<span style='font-weight:700'>{u}</span>"
             f"<span style='color:{SUB};font-size:13px'>{cnt} 項資產使用中</span></div>",
             unsafe_allow_html=True)
         disabled = (cnt > 0) or (len(UNITS) <= 1)
@@ -1281,7 +1299,7 @@ def page_settings(data):
 def main():
     inject_css()
     if st.session_state.get("_flash"):
-        st.toast(st.session_state.pop("_flash"), icon="✅")
+        st.toast(st.session_state.pop("_flash"))
     if not require_login():
         return
 
@@ -1313,8 +1331,8 @@ def main():
             st.session_state.role = None
             st.rerun()
         if is_admin():
-            with st.expander("⚙️ 首次設定 / 重建資料（危險）"):
-                st.caption("⚠️ 僅限第一次建置使用。按下會「清空並覆蓋」現有所有資料，改回範例資料，無法復原。")
+            with st.expander("首次設定 / 重建資料（危險）"):
+                st.caption("僅限第一次建置使用。按下會「清空並覆蓋」現有所有資料，改回範例資料，無法復原。")
                 confirm = st.checkbox("我了解這會清除現有資料，仍要重建", key="init_confirm")
                 if st.button("初始化試算表（含範例）", disabled=not confirm):
                     init_sheets()
@@ -1335,7 +1353,7 @@ def main():
     UNITS = unit_list if unit_list else list(DEFAULT_UNITS)
 
     if all(data[n].empty for n in SCHEMAS):
-        st.info("試算表是空的。請開啟左側「⚙️ 首次設定」並按「初始化試算表」建立範例資料。")
+        st.info("試算表是空的。請開啟左側「首次設定」並按「初始化試算表」建立範例資料。")
 
     # 權限保護：非管理者不得進入管理頁（即使手動切換）
     admin_only = {"作廢申請", "設定"}
